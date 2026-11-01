@@ -25,7 +25,7 @@ function h(tag, props = {}, ...kids) {
 const svg = (d) => { const e = document.createElement('span'); e.innerHTML = `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`; return e.firstChild; };
 const ICON = {
   left: '<path d="M15 18l-6-6 6-6"/>', right: '<path d="M9 18l6-6-6-6"/>',
-  up: '<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>', clip: '<path d="M21 12l-9 9a5 5 0 01-7-7l9-9a3 3 0 014 4l-9 9a1 1 0 01-2-2l8-8"/>',
+  up: '<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>', pencil: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>', clip: '<path d="M21 12l-9 9a5 5 0 01-7-7l9-9a3 3 0 014 4l-9 9a1 1 0 01-2-2l8-8"/>',
 };
 const $ = (s, r = document) => r.querySelector(s);
 const pmap = () => Object.fromEntries(S.profiles.map((p) => [p.id, p]));
@@ -114,7 +114,7 @@ function renderShell() {
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, h('img', { src: 'assets/logo.png', alt: '' }), h('span', {}, 'Niffler')),
       h('nav', { class: 'tabs', 'aria-label': 'Chức năng' }, tabs.map(([k, l]) => h('button', { class: 'tab', 'data-tab': k, onclick: () => { S.view = k; renderShell(); } }, l))),
-      h('div', { class: 'who' }, h('button', { class: 'linkbtn', title: 'Đổi tên hiển thị', onclick: () => nameDialog(false) }, S.me.name), isAdmin() && h('span', { class: 'role' }, 'Admin'),
+      h('div', { class: 'who' }, h('span', {}, S.me.name), h('button', { class: 'btn rename', onclick: () => nameDialog(false) }, svg(ICON.pencil), ' Đổi tên'), isAdmin() && h('span', { class: 'role' }, 'Admin'),
         h('button', { class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))),
     h('main', { id: 'view' }));
   document.querySelectorAll('.tab').forEach((b) => b.dataset.tab === S.view && b.setAttribute('aria-current', 'page'));
@@ -220,17 +220,17 @@ function createDialog(p, file) {
 }
 
 /* ---------- đặt / đổi tên hiển thị ---------- */
-function nameDialog(first) {
-  const m = modal(null, first);
-  const inp = h('input', { value: S.me.named ? S.me.name : '', required: true, maxlength: '60', placeholder: 'Ví dụ: Nguyễn Văn An' }), err = h('p', { class: 'err' });
+function nameDialog(first, target) {
+  const who = target || S.me, m = modal(null, first);
+  const inp = h('input', { value: who.named ? who.name : '', required: true, maxlength: '60', placeholder: 'Ví dụ: Nguyễn Văn An' }), err = h('p', { class: 'err' });
   m.box.replaceChildren(h('form', { onsubmit: async (e) => {
     e.preventDefault(); const n = inp.value.trim(); if (!n) return;
-    const { error } = await sb.rpc('set_my_name', { n });
+    const { error } = target && target.id !== S.me.id ? await sb.from('profiles').update({ name: n.slice(0, 60) }).eq('id', target.id) : await sb.rpc('set_my_name', { n });
     if (error) { err.textContent = error.message; return; }
     m.close(); await loadAll(); renderShell(); toast('Đã lưu tên');
-  } }, h('h2', {}, first ? 'Chào mừng đến Niffler Tracker' : 'Đổi tên hiển thị'),
+  } }, h('h2', {}, first ? 'Chào mừng đến Niffler Tracker' : target ? `Đổi tên cho ${target.email}` : 'Đổi tên hiển thị'),
     first && h('p', { class: 'muted' }, 'Đây là lần đầu bạn đăng nhập. Hãy đặt tên để mọi người nhận ra bạn.'),
-    h('label', { class: 'field' }, 'Tên của bạn', inp), err,
+    h('label', { class: 'field' }, target ? 'Tên hiển thị' : 'Tên của bạn', inp), err,
     h('div', { class: 'actions' }, !first && h('button', { class: 'btn', type: 'button', onclick: m.close }, 'Huỷ'), h('button', { class: 'btn primary', type: 'submit' }, 'Lưu'))));
   inp.focus();
 }
@@ -448,7 +448,7 @@ function renderMembers() {
       h('button', { class: 'btn primary', type: 'submit' }, 'Thêm')),
     h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Họ tên', 'Email', 'Vai trò', 'Đã đăng nhập', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, S.profiles.map((p) => h('tr', {}, h('td', {}, p.named ? p.name : '(chưa đặt tên)'), h('td', {}, p.email), h('td', {}, p.role === 'admin' ? 'Admin' : 'Thành viên'), h('td', {}, p.auth_id ? 'Rồi' : 'Chưa'),
-        h('td', {}, p.id !== S.me.id && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để xoá (xoá cả việc của họ)'; return; } const { error } = await sb.from('profiles').delete().eq('id', p.id); if (error) return toast(error.message); await loadAll(); renderMembers(); } }, 'Xoá'))))))));
+        h('td', {}, h('button', { class: 'btn', style: 'margin-right:6px', onclick: () => nameDialog(false, p) }, 'Đổi tên'), p.id !== S.me.id && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để xoá (xoá cả việc của họ)'; return; } const { error } = await sb.from('profiles').delete().eq('id', p.id); if (error) return toast(error.message); await loadAll(); renderMembers(); } }, 'Xoá'))))))));
 }
 
 boot();

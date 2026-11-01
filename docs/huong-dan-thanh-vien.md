@@ -3,7 +3,7 @@
 ## Đăng nhập
 Bấm **Đăng nhập bằng Google** bằng đúng email admin đã thêm cho bạn. Nếu báo "Chưa có trong danh sách", nhắn admin thêm email đó.
 
-Lần đầu đăng nhập, hệ thống hỏi **tên của bạn**: nhập tên thật để mọi người nhận ra. Muốn đổi sau này, bấm vào tên của bạn ở góc phải trên cùng.
+Lần đầu đăng nhập, hệ thống hỏi **tên của bạn**: nhập tên thật để mọi người nhận ra. Muốn đổi sau này, bấm nút **Đổi tên** ở góc phải trên cùng.
 
 ## Xem việc của bạn
 Tab **Bảng việc**: hàng đầu tiên là của bạn. Mỗi việc là một thẻ, nằm ở 3 cột:

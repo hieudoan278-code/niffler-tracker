@@ -1,7 +1,7 @@
 # Hướng dẫn cho admin
 
 ## 1. Thêm thành viên
-Tab **Thành viên** → nhập **email Google** và vai trò → **Thêm**. Không cần nhập tên: người đó đăng nhập lần đầu sẽ tự đặt tên (sau này bấm vào tên ở góc phải trên để đổi). Chỉ email đã có trong danh sách mới đăng nhập được. Cột "Đã đăng nhập" cho biết ai đã vào lần nào.
+Tab **Thành viên** → nhập **email Google** và vai trò → **Thêm**. Không cần nhập tên: người đó đăng nhập lần đầu sẽ tự đặt tên (sau này bấm nút **Đổi tên** ở góc phải trên để đổi). Admin cũng đổi được tên của bất kỳ ai bằng nút **Đổi tên** ở cuối mỗi dòng trong tab Thành viên. Chỉ email đã có trong danh sách mới đăng nhập được. Cột "Đã đăng nhập" cho biết ai đã vào lần nào.
 
 ## 2. Giao việc hàng loạt bằng 1 file CSV
 1. Tab **Tải mẫu** → tải `mau-phan-cong.csv`.

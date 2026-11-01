@@ -182,3 +182,5 @@ tr.bad td { background: var(--red-wash); }
   .kv { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+.who .btn.rename { min-height: 32px; padding: 3px 10px; background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.45); font-size: 13px; }
+.who .btn.rename:hover { background: rgba(255,255,255,.28); }
