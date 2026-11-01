@@ -171,5 +171,12 @@ create policy files_proof_write on storage.objects for insert with check (
 -- ---------- realtime ----------
 alter publication supabase_realtime add table tasks, comments, task_events, meetings, events, profiles;
 
+-- ---------- đặt / đổi tên hiển thị (thành viên chỉ đổi được tên của chính mình) ----------
+create or replace function set_my_name(n text) returns void language sql security definer set search_path = public as $$
+  update profiles set name = left(trim(n), 60) where auth_id = auth.uid() and length(trim(n)) > 0
+$$;
+revoke all on function set_my_name(text) from public;
+grant execute on function set_my_name(text) to authenticated;
+
 -- ---------- admin đầu tiên (ĐỔI EMAIL RỒI CHẠY) ----------
 -- insert into profiles(email, name, role) values ('niffler.hugo@gmail.com', 'Niffler Admin', 'admin');

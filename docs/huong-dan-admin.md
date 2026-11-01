@@ -1,7 +1,7 @@
 # Hướng dẫn cho admin
 
 ## 1. Thêm thành viên
-Tab **Thành viên** → nhập email Google, họ tên, vai trò → **Thêm**. Chỉ email đã có trong danh sách mới đăng nhập được. Cột "Đã đăng nhập" cho biết ai đã vào lần nào.
+Tab **Thành viên** → nhập **email Google** và vai trò → **Thêm**. Không cần nhập tên: người đó đăng nhập lần đầu sẽ tự đặt tên (sau này bấm vào tên ở góc phải trên để đổi). Chỉ email đã có trong danh sách mới đăng nhập được. Cột "Đã đăng nhập" cho biết ai đã vào lần nào.
 
 ## 2. Giao việc hàng loạt bằng 1 file CSV
 1. Tab **Tải mẫu** → tải `mau-phan-cong.csv`.
@@ -20,8 +20,10 @@ Tab **Thành viên** → nhập email Google, họ tên, vai trò → **Thêm**.
 
 Mỗi việc rơi đúng vào cột **Nhận** của người có email đó.
 
-## 3. Giao một việc lẻ kèm file
-Thả bất kỳ file nào (đề bài, brief…, trừ `.csv`) vào **hàng của người đó**. Điền tên việc, hạn chót, mô tả → **Giao việc**. File được đính kèm vào thẻ.
+## 3. Giao một việc lẻ
+Có hai cách, không bắt buộc kéo thả:
+- Bấm **+ Thêm việc** (đầu trang, hoặc ngay trên hàng của người đó) → chọn người, điền tên việc, hạn chót, mô tả, file đính kèm nếu có → **Giao việc**.
+- Hoặc thả file bất kỳ (đề bài, brief…, trừ `.csv`) vào **hàng của người đó**, form tự mở sẵn với file đó.
 
 ## 4. Theo dõi
 - Banner đỏ đầu Bảng việc liệt kê các việc **trễ hạn**.
