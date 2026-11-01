@@ -368,12 +368,12 @@ function renderTimeline() {
   v.replaceChildren(head('Timeline tổng', evForm || ''),
     h('div', { class: 'tl' }, h('div', { class: 'tl-grid', style: `min-width:${width + 150}px` },
       h('div', { class: 'tl-head' }, h('div', { class: 'name', style: 'padding:6px 12px;font-weight:700' }, 'Người / sự kiện'), h('div', { class: 'tl-ticks', style: `width:${width}px` }, ticks)),
-      h('div', { class: 'tl-row' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today lab', style: `left:${todayX}px` }),
+      h('div', { class: 'tl-row', style: 'min-height:54px' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today lab', style: `left:${todayX}px` }),
         marks.map((m) => h('div', { class: 'marker', style: `left:${x(m.d)}px`, title: `${fmtDay(m.d)} · ${m.t}` })),
-        marks.map((m) => h('span', { style: `position:absolute;left:${x(m.d) + 12}px;top:2px;font-size:11px;white-space:nowrap` }, m.t)))),
+        marks.map((m) => h('span', { style: `position:absolute;left:${x(m.d) + 14}px;top:28px;font-size:11px;white-space:nowrap` }, m.t)))),
       rows.map(({ p, ts }) => h('div', { class: 'tl-row', style: `min-height:${ts.length * 28 + 12}px` }, h('div', { class: 'name' }, p.name || p.email),
         track('', h('div', { class: 'today', style: `left:${todayX}px` }), ts.map((t, i) => {
-          const l = x(t.created_at), w = Math.max(x(t.deadline) - l, 40), c = isLate(t) ? 'late' : t.status;
+          const l = x(t.created_at), w = Math.max(x(t.deadline) - l, 110), c = isLate(t) ? 'late' : t.status;
           return h('button', { class: `bar ${c}`, style: `left:${l}px;width:${w}px;top:${6 + i * 28}px`, title: `${t.title} — hạn ${fmt(t.deadline)}`, onclick: () => openDrawer(t.id) }, t.title);
         }))))),
     rows.length === 0 && h('p', { class: 'muted', style: 'padding:14px' }, 'Chưa có việc nào để vẽ.')));
