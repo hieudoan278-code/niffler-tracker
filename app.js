@@ -352,9 +352,10 @@ function renderTimeline() {
   const v = $('#view'), DAY = 28, P = S.profiles;
   const tasks = S.tasks, now = new Date();
   const start = new Date(Math.min(now - 7 * 864e5, ...tasks.map((t) => +new Date(t.created_at)), ...S.meetings.map((m) => +new Date(m.held_on)))); start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // lùi về thứ Hai để nhãn tuần không đè nhau
   const end = new Date(Math.max(+now + 21 * 864e5, ...tasks.map((t) => +new Date(t.deadline)), ...S.events.map((e) => +new Date(e.on_date)))); end.setDate(end.getDate() + 3);
   const x = (d) => ((new Date(d) - start) / 864e5) * DAY, width = x(end);
-  const ticks = []; for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) if (d.getDay() === 1 || +d === +start) ticks.push(h('div', { class: 'tick', style: `left:${x(d)}px` }, fmtDay(d)));
+  const ticks = []; for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) if (d.getDay() === 1) ticks.push(h('div', { class: 'tick', style: `left:${x(d)}px` }, fmtDay(d)));
   const marks = [...S.meetings.map((m) => ({ d: m.held_on, t: 'Họp: ' + m.title })), ...S.events.map((e) => ({ d: e.on_date, t: e.title }))];
   const rows = P.map((p) => ({ p, ts: tasks.filter((t) => t.assignee === p.id) })).filter((r) => r.ts.length);
   const track = (cls, ...kids) => h('div', { class: 'tl-track ' + cls, style: `width:${width}px` }, ...kids);
@@ -367,7 +368,7 @@ function renderTimeline() {
   v.replaceChildren(head('Timeline tổng', evForm || ''),
     h('div', { class: 'tl' }, h('div', { class: 'tl-grid', style: `min-width:${width + 150}px` },
       h('div', { class: 'tl-head' }, h('div', { class: 'name', style: 'padding:6px 12px;font-weight:700' }, 'Người / sự kiện'), h('div', { class: 'tl-ticks', style: `width:${width}px` }, ticks)),
-      h('div', { class: 'tl-row' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today', style: `left:${todayX}px` }),
+      h('div', { class: 'tl-row' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today lab', style: `left:${todayX}px` }),
         marks.map((m) => h('div', { class: 'marker', style: `left:${x(m.d)}px`, title: `${fmtDay(m.d)} · ${m.t}` })),
         marks.map((m) => h('span', { style: `position:absolute;left:${x(m.d) + 12}px;top:2px;font-size:11px;white-space:nowrap` }, m.t)))),
       rows.map(({ p, ts }) => h('div', { class: 'tl-row', style: `min-height:${ts.length * 28 + 12}px` }, h('div', { class: 'name' }, p.name || p.email),
