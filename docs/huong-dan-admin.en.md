@@ -30,9 +30,18 @@ Each task can belong to an **event** (choose one or type a new name when assigni
 **Events** tab → **Complete event** (click twice; all of the event's tasks must be Done). Its tasks disappear from the board but stay in the database. Within about an hour the system creates a Google Doc log (tasks, assignees, deadlines, completion dates, proof paths, comments) in the Drive folder **"Niffler - Event logs"** of `niffler.hugo@gmail.com`, and the link appears in the Events tab. The **Delete** button removes an event together with its tasks (the Drive log is kept).
 
 ## 5. Meeting log
-**Meeting log** tab → **Add meeting log**: pick a date and a title, and edit the content. **The template is pre-filled in the content box** (edit or replace it for each meeting), or drop a `.md/.txt` file onto the box. Everyone can read the log.
+**Meeting log** tab → **Add meeting log** is a Notion-style editor: pick a date and title, then write directly (the template is pre-filled; edit or clear it for each meeting). You can also drop a `.md/.txt` file onto it. The toolbar has **B** (bold, Ctrl+B), **I** (italic, Ctrl+I), **H** (heading), **•** (bullet) and **+ Assign task**.
 
-**Turn the log into tasks:** keep the table under **Tasks assigned** as it is (columns *Who | Task | Deadline | Event*; Who is a name or email, deadline like `10/12/2026`), then click **Create tasks from "Tasks assigned"**. The multi-task table opens with the rows already filled in so you can check, fix and click **Assign all**. Saving a log never creates tasks by itself; you always confirm first.
+**"/" commands:** type `/` on an empty line and a menu appears at the cursor; ↑/↓ to choose, Enter or Tab to insert, Esc to close.
+- `/task` inserts a **task card** (assignee, task, deadline, event). Type a few letters in the assignee box to get member suggestions (accents optional).
+- `/decision`, `/carry`, `/note` add a bullet to Decisions, Carried over, Other notes (the section is created if missing).
+- `/h` heading, `/present` Present / Absent lines, `/date` today's date.
+
+**Saving the log assigns the tasks.** The save button tells you in advance how many tasks it will create ("Save log and assign 3 tasks"). Every card is checked like the multi-task table (assignee chosen, deadline not past, no duplicate…); if any card has a problem, **nothing is saved** and that card shows red text. Created tasks can't be undone, so read carefully before clicking. Empty cards are ignored.
+
+**Editing a saved log:** click **Edit** on the log. Every change is saved block by block; click **Done** to create tasks for new cards (assigned cards show "Assigned" with an Open task button) and refresh the version everyone reads, or **Close** to only refresh the readable version. Deleting a card in the log does not delete the task (delete it on the Task board). Old logs without blocks are converted automatically the first time they are edited.
+
+**Several admins editing one log:** a block someone is typing in shows "<name> is editing" and is read-only for the others; two people can edit two different blocks at the same time and changes appear on the other side right away. The top of the log shows "Editing now: …". If someone closes the tab mid-edit, the lock is released after about 30 seconds. It is not character-by-character co-typing inside the same block.
 
 ## 6. Timeline
 **Timeline** tab: add **event markers** (submission deadlines, event days…) with the form at the top. Meetings appear automatically as yellow diamonds.

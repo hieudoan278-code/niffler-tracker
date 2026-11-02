@@ -30,9 +30,18 @@ Mỗi việc có thể thuộc một **sự kiện** (chọn hoặc gõ tên m�
 Tab **Sự kiện** → **Hoàn thành sự kiện** (bấm 2 lần; phải xong hết việc của sự kiện). Việc của sự kiện đó ẩn khỏi bảng, dữ liệu vẫn giữ. Trong tối đa khoảng 1 giờ, hệ thống tạo một Google Doc log (danh sách việc, người làm, hạn, ngày xong, minh chứng, bình luận) trong thư mục Drive **"Niffler - Event logs"** của `niffler.hugo@gmail.com`, và link hiện ở tab Sự kiện.
 
 ## 5. Log họp
-Tab **Log họp** → ô **Thêm log họp**: chọn ngày, tiêu đề, và sửa nội dung. **Mẫu đã hiện sẵn trong ô nội dung** (xoá hoặc sửa theo buổi họp), hoặc thả file `.md/.txt` vào ô. Mọi người đều đọc được.
+Tab **Log họp** → ô **Thêm log họp** là một trình soạn kiểu Notion: chọn ngày, tiêu đề, rồi soạn trực tiếp (mẫu đã hiện sẵn; xoá hoặc sửa theo buổi họp). Có thể thả file `.md/.txt` vào ô. Thanh trên cùng có **B** (đậm, Ctrl+B), **I** (nghiêng, Ctrl+I), **H** (tiêu đề), **•** (gạch đầu dòng) và **+ Giao việc**.
 
-**Tự đẩy việc từ log:** giữ nguyên bảng ở mục **Việc giao** (cột *Ai | Việc | Hạn | Sự kiện*; Ai là tên hoặc email, hạn dạng `10/12/2026`), rồi bấm **Tạo việc từ mục Việc giao**. Bảng nhập nhiều việc mở ra với các dòng đã điền sẵn để bạn kiểm tra, sửa, rồi bấm **Giao tất cả**. Việc không tự tạo khi chỉ lưu log, bạn luôn xác nhận trước.
+**Lệnh "/"**: gõ `/` ở dòng trống, menu hiện ngay tại con trỏ; ↑/↓ chọn, Enter hoặc Tab chèn, Esc đóng.
+- `/task` chèn **thẻ giao việc** (người nhận, việc, hạn, sự kiện). Gõ vài chữ vào ô người nhận để được gợi ý thành viên (không cần gõ dấu).
+- `/decision`, `/carry`, `/note` thêm một gạch đầu dòng vào mục Quyết định, Việc tồn, Ghi chú (chưa có mục thì tự tạo mục).
+- `/h` tiêu đề mục, `/present` dòng Có mặt / Vắng, `/date` ngày hôm nay.
+
+**Lưu log là tự giao việc.** Nút lưu cho biết trước số việc sẽ tạo ("Lưu log và giao 3 việc"). Hệ thống kiểm tra mọi thẻ như bảng nhập nhiều việc (chọn người, hạn chưa qua, không trùng việc…); có thẻ lỗi thì **không lưu gì cả** và thẻ đó hiện chữ đỏ. Việc đã tạo không hoàn tác được, hãy đọc kỹ trước khi bấm. Thẻ trống bị bỏ qua.
+
+**Sửa log đã lưu:** bấm **Sửa** trên log. Mỗi thay đổi tự lưu theo từng khối; bấm **Xong** để tạo việc cho thẻ mới (thẻ đã giao hiện "Đã giao", có nút mở việc) và cập nhật bản mọi người đọc, hoặc **Đóng** để chỉ cập nhật bản đọc. Xoá một thẻ trong log không xoá việc đã tạo (xoá ở Bảng việc). Log cũ chưa có khối sẽ được chuyển tự động khi sửa lần đầu.
+
+**Nhiều admin cùng sửa một log:** khối ai đang gõ sẽ hiện nhãn "<tên> đang sửa" và chỉ đọc với người khác; hai người sửa hai khối khác nhau thì cùng lúc được, thay đổi hiện ngay bên kia. Đầu log có dòng "Đang soạn: …". Đóng tab giữa chừng thì khoá tự nhả sau khoảng 30 giây. Không gõ chung từng chữ trong cùng một khối.
 
 ## 6. Timeline
 Tab **Timeline**: thêm **mốc sự kiện** (hạn nộp hồ sơ, ngày diễn ra sự kiện…) bằng form phía trên. Buổi họp tự hiện thành hình thoi vàng.
