@@ -60,7 +60,7 @@ function mdToBlocks(mdText) {
 
 /* ---------- trình soạn ---------- */
 function blockEditor(opts = {}) {
-  const doc = h('div', { class: 'ed-doc', 'data-drop': '' }), menu = h('div', { class: 'slashmenu', role: 'listbox', hidden: true });
+  const doc = h('div', { class: 'ed-doc', 'data-drop': '' }), menu = h('div', { class: 'slashmenu', role: 'listbox', hidden: true, onmousedown: (e) => e.preventDefault() });   // bấm/kéo thanh cuộn của menu không làm ô nhập mất focus
   let last = null, items = [], idx = 0, pick = null, composing = false;
   const ls = [], change = () => { opts.onChange?.(); ls.forEach((f) => f()); };
   const PH = () => ({ h1: L2('Tiêu đề', 'Title'), h2: L2('Tiêu đề mục', 'Heading'), p: L2('Gõ nội dung, hoặc gõ / để chọn lệnh', 'Type here, or / for commands'), li: L2('Mục', 'Item') });
@@ -138,8 +138,8 @@ function blockEditor(opts = {}) {
     const hh = menu.offsetHeight; menu.style.top = (rect.bottom + hh + 12 > innerHeight && rect.top > hh + 12 ? rect.top - hh - 4 : rect.bottom + 4) + 'px';
   }
   function closeMenu() { menu.hidden = true; items = []; pick = null; }
-  function moveMenu(d) { idx = (idx + d + items.length) % items.length; [...menu.children].forEach((c, i) => c.classList.toggle('on', i === idx)); menu.children[idx]?.scrollIntoView({ block: 'nearest' }); }
-  window.addEventListener('scroll', () => { if (!menu.hidden) closeMenu(); }, true);
+  function moveMenu(d) { idx = (idx + d + items.length) % items.length; [...menu.children].forEach((c, i) => c.classList.toggle('on', i === idx)); const c = menu.children[idx]; if (c) { if (c.offsetTop < menu.scrollTop) menu.scrollTop = c.offsetTop; else if (c.offsetTop + c.offsetHeight > menu.scrollTop + menu.clientHeight) menu.scrollTop = c.offsetTop + c.offsetHeight - menu.clientHeight; } }
+  window.addEventListener('scroll', (e) => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); }, true);   // chỉ đóng khi trang cuộn, không đóng khi cuộn trong menu
 
   function suggestWho(inp) {
     const q = fold(inp.value).trim(), list = S.profiles.filter((p) => !q || fold(p.name).includes(q) || fold(p.email).includes(q));
