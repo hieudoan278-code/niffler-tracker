@@ -47,8 +47,10 @@ Tab **Log họp** → ô **Thêm log họp** là một trình soạn kiểu Noti
 Tab **Timeline**: thêm **mốc sự kiện** (hạn nộp hồ sơ, ngày diễn ra sự kiện…) bằng form phía trên. Buổi họp tự hiện thành hình thoi vàng.
 
 ## 7. Email tự động
-`niffler.hugo@gmail.com` tự gửi:
-- Cho người được giao: khi việc còn dưới 24 giờ đến hạn và chưa xong.
-- Cho tất cả admin: một email tổng hợp khi có việc trễ hạn (mỗi việc báo một lần). Dời hạn thì việc đó được tính lại.
+`niffler.hugo@gmail.com` tự gửi (nội dung tiếng Anh):
+- Cho người được giao: khi việc còn dưới 24 giờ đến hạn và chưa xong (kiểm mỗi giờ).
+- Cho tất cả admin: **trong khoảng 1 phút sau khi việc trễ hạn** (kiểm mỗi phút), một mail tổng hợp nếu nhiều việc trễ cùng lúc; mỗi việc báo một lần, dời hạn thì được tính lại.
+- Log sự kiện trong Drive được tạo trong khoảng 1 phút sau khi bấm Hoàn thành sự kiện.
+- **Không có mail khi giao việc** (cố ý, để giao nhầm không gây rối; người nhận thấy việc ngay trong Bảng việc).
 
 Cài đặt xem `docs/cai-dat.md`.

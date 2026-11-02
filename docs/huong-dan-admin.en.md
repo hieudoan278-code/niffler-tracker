@@ -48,7 +48,9 @@ Each task can belong to an **event** (choose one or type a new name when assigni
 
 ## 7. Automatic emails
 `niffler.hugo@gmail.com` sends, in English:
-- To the assignee: when a task has less than 24 hours left and isn't done.
-- To all admins: one digest email when tasks are overdue (each task is reported once). Moving the deadline resets it.
+- To the assignee: when a task has less than 24 hours left and isn't done (checked hourly).
+- To all admins: **within about 1 minute after a task becomes overdue** (checked every minute), as one digest if several tasks become overdue together; each task is reported once, and moving the deadline resets it.
+- The Drive event log is created within about 1 minute after you click Complete event.
+- **No email is sent when a task is assigned** (on purpose, so a mistaken assignment doesn't cause confusion; the assignee sees the task on the Task board right away).
 
 See `docs/cai-dat.md` for setup.

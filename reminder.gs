@@ -3,7 +3,7 @@
  * (Tiếng Việt: gửi mail nhắc hạn / báo trễ hạn, xuất log sự kiện vào Drive.)
  * Dán vào Apps Script khi đăng nhập bằng niffler.hugo@gmail.com (mail gửi từ chính tài khoản này, không cần mật khẩu).
  * Project Settings > Script properties: SUPABASE_URL, SERVICE_KEY (service_role, KHÔNG đưa lên GitHub), APP_URL.
- * Chạy `setup` một lần (cấp quyền gửi mail + tạo Doc trong Drive); sau đó trigger tự chạy `run` mỗi giờ.
+ * Chạy `setup` một lần (cấp quyền gửi mail + tạo Doc trong Drive). Sau đó: `tick` tự chạy mỗi phút (báo trễ hạn + log Drive), `run` mỗi giờ (nhắc còn dưới 24h).
  */
 const PROP = PropertiesService.getScriptProperties();
 const SB = PROP.getProperty('SUPABASE_URL');
@@ -44,7 +44,20 @@ function run() {
     } catch (e) { console.error('remind ' + t.id, e); }   // lỗi thì không đánh dấu, lần sau thử lại
   });
 
-  // 2) Báo admin: đã trễ hạn, chưa xong, chưa báo — 1 mail tổng hợp.
+  notifyLate_();   // lưới an toàn: tick() mỗi phút đã lo phần này
+  exportLogs_();
+}
+
+// Chạy mỗi phút: chỉ 2 truy vấn nhẹ rồi thoát nếu không có gì. Việc vừa trễ hạn là báo admin ngay; sự kiện vừa hoàn thành là tạo log Drive ngay.
+// Các cờ overdue_notified / drive_url bảo đảm không gửi trùng dù run() cũng gọi lại.
+function tick() {
+  try { notifyLate_(); } catch (e) { console.error('notifyLate', e); }   // lỗi một phần không chặn phần còn lại
+  try { exportLogs_(); } catch (e) { console.error('exportLogs', e); }
+}
+
+// Báo admin: đã trễ hạn, chưa xong, chưa báo — 1 mail tổng hợp (không gửi mail khi giao việc, chủ ý).
+function notifyLate_() {
+  const now = new Date(), sel = 'id,title,deadline,profiles(name,email)';
   const late = api_('tasks?select=' + sel + '&status=neq.done&overdue_notified=eq.false&deadline=lt.' + now.toISOString() + '&order=deadline');
   if (late.length) {
     const admins = api_('profiles?select=email&role=eq.admin').map((a) => a.email);
@@ -55,11 +68,9 @@ function run() {
       late.forEach((t) => { try { api_('tasks?id=eq.' + t.id, 'patch', { overdue_notified: true }); } catch (e) { console.error('late ' + t.id, e); } });
     }
   }
-
-  exportLogs_();
 }
 
-// 3) Sự kiện đã "Hoàn thành" trên web (closed_at) mà chưa có drive_url: tạo Google Doc log trong Drive của tài khoản này.
+// Sự kiện đã "Hoàn thành" trên web (closed_at) mà chưa có drive_url: tạo Google Doc log trong Drive của tài khoản này.
 const LOG_FOLDER = 'Niffler - Event logs';
 function exportLogs_() {
   const done = api_('projects?select=*&closed_at=not.is.null&drive_url=is.null');
@@ -96,6 +107,7 @@ function folder_() {
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('tick').timeBased().everyMinutes(1).create();    // nếu vượt hạn mức 90 phút/ngày: đổi thành everyMinutes(5)
   ScriptApp.newTrigger('run').timeBased().everyHours(1).create();
   run();   // lần đầu: cấp quyền gửi mail và chạy thử
 }

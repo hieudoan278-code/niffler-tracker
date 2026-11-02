@@ -28,7 +28,7 @@ Lưu logo của CLB thành `assets/logo.png` (PNG, vuông, nền trong hoặc tr
    - `SUPABASE_URL` = Project URL
    - `SERVICE_KEY` = *service_role key* (Supabase Settings → API; khoá **bí mật**, không dán lên GitHub hay gửi người khác)
    - `APP_URL` = địa chỉ GitHub Pages
-3. Chọn hàm `setup` → Run → cấp quyền khi Google hỏi. Xong: trigger tự chạy mỗi giờ.
+3. Chọn hàm `setup` → Run → cấp quyền khi Google hỏi. Xong: hai trigger tự chạy: `tick` mỗi phút (báo trễ hạn + log Drive) và `run` mỗi giờ (nhắc còn dưới 24 giờ). Kiểm tra ở Trình kích hoạt (biểu tượng đồng hồ): phải thấy cả hai dòng. Nếu vượt hạn mức trigger 90 phút/ngày, đổi `everyMinutes(1)` thành `everyMinutes(5)` trong `setup` rồi chạy lại `setup`.
 
 ## Thử nhanh
 - Đăng nhập admin, thêm 1 thành viên (email phụ của bạn), giao 1 việc hạn sau 1 giờ, chạy tay hàm `run` → thành viên nhận mail.
