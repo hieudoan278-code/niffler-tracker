@@ -23,7 +23,7 @@ function api_(path, method, body) {
 const esc_ = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt_ = (d) => Utilities.formatDate(new Date(d), 'Asia/Ho_Chi_Minh', 'HH:mm dd/MM/yyyy');
 const shell_ = (inner) => '<div style="font-family:Arial,sans-serif;max-width:560px;border:1px solid #e6dcea;border-radius:10px;overflow:hidden">' +
-  '<div style="background:#6a0f7a;color:#fff;padding:12px 16px;font-weight:bold;letter-spacing:.05em">NIFFLER · HUGO ENGLISH CLUB</div>' +
+  '<div style="background:#6a0f7a;color:#fff;padding:12px 16px;font-weight:bold;letter-spacing:.05em">NIFFLER · HUGO ENGLISH CLUB<div style="font-weight:normal;font-style:italic;font-size:12px;letter-spacing:0;color:#f2c230">Friend Forever</div></div>' +
   '<div style="padding:16px;color:#1f1a24;line-height:1.5">' + inner + (APP ? '<p><a href="' + esc_(APP) + '" style="color:#6a0f7a;font-weight:bold">Mở Niffler Tracker</a></p>' : '') + '</div></div>';
 
 function run() {
