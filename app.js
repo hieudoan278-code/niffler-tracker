@@ -343,7 +343,7 @@ function checkTask(p, title, dl, event, seen, noPerson = 'Email chưa có trong 
 }
 async function assignTasks(good) {
   const ids = {}; for (const n of new Set(good.map((x) => x.event).filter(Boolean))) ids[n.toLowerCase()] = await ensureProject(n);
-  const { error } = await sb.from('tasks').insert(good.map((x) => ({ title: x.title, description: x.description, assignee: x.p.id, deadline: x.dl.toISOString(), project_id: ids[x.event.toLowerCase()] || null })));
+  const { error } = await sb.from('tasks').insert(good.map((x) => ({ ...(x.id ? { id: x.id } : {}), title: x.title, description: x.description || '', assignee: x.p.id, deadline: x.dl.toISOString(), project_id: ids[x.event.toLowerCase()] || null })));
   if (error) throw error;
 }
 
@@ -520,31 +520,46 @@ function renderMeetings() {
 }
 const tplFile = () => `templates/mau-log-hop${LANG === 'en' ? '.en' : ''}.md`;
 const tplText = () => fetch(tplFile()).then((r) => r.text());
-// Lấy các dòng của bảng markdown ngay dưới tiêu đề "Việc giao" / "Tasks assigned" (bỏ dòng tiêu đề cột).
-function meetingTasks(mdText) {
-  const out = []; let on = false;
-  for (const ln of mdText.split(/\r?\n/)) {
-    if (/^#{1,6}\s/.test(ln)) { on = /^#{1,6}\s*(việc giao|tasks? assigned|action items)\b/i.test(ln); continue; }
-    if (!on || !ln.trim().startsWith('|')) continue;
-    const c = ln.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim());
-    if (c.every((x) => /^:?-{2,}:?$/.test(x))) continue;
-    out.push(c);
-  }
-  return out.slice(1).filter((c) => c.some(Boolean));
+// Kiểm tra các thẻ giao việc CHƯA giao của trình soạn; tô lỗi trong thẻ. Trả về các việc hợp lệ sẵn sàng tạo.
+function validateTasks(ed, blocks) {
+  const seen = new Set(S.tasks.map((t) => t.assignee + '|' + t.title.toLowerCase())), good = []; let bad = 0;
+  blocks.forEach((b) => {
+    if (b.type !== 'task' || b.task_id) return; const c = b.content;
+    const p = S.profiles.find((x) => x.id === c.who), dl = c.deadline ? new Date(c.deadline) : null, event = c.event || '';
+    const why = checkTask(p, c.title, dl, event, seen, 'Chưa chọn người nhận', 'Hạn chót không hợp lệ');
+    ed.mark(b.id, why ? tr(why) : ''); if (why) bad++; else good.push({ id: crypto.randomUUID(), blockId: b.id, p, title: c.title, dl, event, description: '' });
+  });
+  return { ok: !bad, good };
 }
+const blankTask = (b) => b.type === 'task' && !b.task_id && !b.content.who && !b.content.whoText && !b.content.title;
 function meetingForm(redraw) {
-  const date = h('input', { type: 'date', required: true, value: new Date().toISOString().slice(0, 10) }), title = h('input', { required: true, placeholder: 'Họp tuần 12' }), body = h('textarea', { placeholder: 'Dán log họp (Markdown) hoặc thả file .md/.txt vào ô này' });
-  tplText().then((t) => { if (!body.value) body.value = t; });   // mẫu hiện sẵn trong ô nội dung
-  body.ondragover = (e) => e.preventDefault();
-  const read = async (f) => { if (!f) return; body.value = await f.text(); if (!title.value) title.value = f.name.replace(/\.[^.]+$/, ''); };
-  body.ondrop = (e) => { e.preventDefault(); read(e.dataTransfer.files[0]); };
-  const box = h('form', { class: 'meeting', 'data-drop': '', onsubmit: async (e) => {
-    e.preventDefault(); const { error } = await sb.from('meetings').insert({ held_on: date.value, title: title.value.trim(), body_md: body.value, author: S.me.id });
-    if (error) return toast(error.message); title.value = ''; body.value = ''; tplText().then((t) => { if (!body.value) body.value = t; }); await loadAll(); redraw(); toast('Đã lưu log họp');
+  const date = h('input', { type: 'date', required: true, value: new Date().toISOString().slice(0, 10) }), title = h('input', { required: true, placeholder: 'Họp tuần 12' });
+  const save = h('button', { class: 'btn primary', type: 'submit' }, 'Lưu log họp'); let busy = false;
+  const refresh = () => {
+    const n = ed.read().filter((b) => b.type === 'task' && !b.task_id && !blankTask(b)).length;
+    save.textContent = n ? L2(`Lưu log và giao ${n} việc`, `Save log and assign ${n} task${n === 1 ? '' : 's'}`) : tr('Lưu log họp');
+  };
+  const ed = blockEditor({ onChange: refresh, onFile: (f) => { if (!title.value) title.value = f.name.replace(/\.[^.]+$/, ''); } });
+  const loadTpl = () => tplText().then((t) => ed.setBlocks(mdToBlocks(t)));   // mẫu hiện sẵn dạng khối
+  loadTpl();
+  return h('form', { class: 'meeting', 'data-drop': '', onsubmit: async (e) => {
+    e.preventDefault(); if (busy) return;
+    const all = ed.read().filter((b) => !blankTask(b)), { ok, good } = validateTasks(ed, all);
+    if (!ok) return toast(L2('Có thẻ giao việc chưa hợp lệ, xem chữ đỏ trong thẻ.', 'Some task cards are not valid, see the red text in the cards.'));
+    busy = true; save.disabled = true; const made = [], ttl = title.value.trim();
+    try {
+      const mid = crypto.randomUUID();
+      good.forEach((g) => { g.description = L2(`Giao từ log họp: ${ttl}`, `Assigned from meeting log: ${ttl}`); });
+      if (good.length) { await assignTasks(good); made.push(...good.map((g) => g.id)); good.forEach((g) => { all.find((b) => b.id === g.blockId).task_id = g.id; }); }
+      let r = await sb.from('meetings').insert({ id: mid, held_on: date.value, title: ttl, body_md: blocksToMd(all), author: S.me.id, blocks_ready: true });
+      if (!r.error) r = await sb.from('meeting_blocks').insert(all.map((b, i) => ({ id: b.id, meeting_id: mid, pos: i + 1, type: b.type, content: b.content, task_id: b.task_id, updated_by: S.me.id })));
+      if (r.error) { await sb.from('meetings').delete().eq('id', mid); throw r.error; }   // blocks xoá theo (cascade)
+      title.value = ''; loadTpl(); await loadAll(); redraw();
+      toast(good.length ? L2(`Đã lưu log và giao ${good.length} việc`, `Log saved and ${good.length} task${good.length === 1 ? '' : 's'} assigned`) : 'Đã lưu log họp');
+    } catch (x) { if (made.length) await sb.from('tasks').delete().in('id', made); toast('Lỗi: ' + x.message); }   // bù trừ: không để việc mồ côi
+    finally { busy = false; save.disabled = false; }
   } }, h('h2', {}, 'Thêm log họp'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, h('label', { class: 'field' }, 'Ngày họp', date), h('label', { class: 'field', style: 'flex:1;min-width:200px' }, 'Tiêu đề', title)),
-    h('label', { class: 'field' }, 'Nội dung', body), h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('button', { class: 'btn primary', type: 'submit' }, 'Lưu log họp'),
-      h('button', { class: 'btn', type: 'button', onclick: () => { const r = meetingTasks(body.value); if (!r.length) return toast('Không thấy bảng trong mục "Việc giao". Giữ nguyên bảng như mẫu (Ai | Việc | Hạn | Sự kiện).'); gridDialog(r); } }, 'Tạo việc từ mục Việc giao')));
-  return box;
+    h('div', { class: 'field' }, h('span', {}, 'Nội dung'), ed.root), h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, save));
 }
 
 /* ---------- hướng dẫn, mẫu ---------- */

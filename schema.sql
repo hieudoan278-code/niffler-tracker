@@ -261,3 +261,28 @@ create or replace function storage_usage() returns jsonb language sql stable sec
 $$;
 revoke all on function storage_usage() from public;
 grant execute on function storage_usage() to authenticated;
+
+-- =====================================================================
+-- PHẦN 4: trình soạn log họp theo khối (sửa lại log, giao việc từ log, cùng soạn).
+-- =====================================================================
+alter table meetings add column blocks_ready boolean not null default false;   -- false = log cũ chỉ có body_md
+alter table meetings add column updated_at timestamptz not null default now();
+
+create table meeting_blocks (
+  id uuid primary key default gen_random_uuid(),
+  meeting_id uuid not null references meetings(id) on delete cascade,
+  pos double precision not null,
+  type text not null check (type in ('h1','h2','p','li','task')),
+  content jsonb not null default '{}',     -- văn bản: {t: markdown inline}; giao việc: {who, whoText, title, deadline, event}
+  task_id uuid references tasks(id) on delete set null,   -- khác null = việc đã được tạo từ khối này
+  lock_by uuid references profiles(id) on delete set null,
+  lock_token text,
+  lock_until timestamptz,
+  updated_by uuid references profiles(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+create index on meeting_blocks(meeting_id, pos);
+alter table meeting_blocks enable row level security;
+create policy read_blocks on meeting_blocks for select using (me() is not null);
+create policy admin_blocks on meeting_blocks for all using (is_admin()) with check (is_admin());
+alter publication supabase_realtime add table meeting_blocks;

@@ -207,3 +207,32 @@ tr.bad td { background: var(--red-wash); }
 .grid tr.bad td { background: #fdeceb; }
 .dialog details { margin: 8px 0; }
 .dialog details textarea { width: 100%; box-sizing: border-box; margin: 6px 0; }
+
+/* ---------- trình soạn log họp ---------- */
+.ed { border: 1px solid var(--line, #e6dcea); border-radius: 10px; background: #fff; }
+.ed-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid #efe6f2; background: #faf5fb; border-radius: 10px 10px 0 0; position: sticky; top: 0; z-index: 5; }
+.ed-bar .btn { min-width: 36px; padding: 4px 10px; }
+.ed-bar .b { font-weight: 800; } .ed-bar .i { font-style: italic; }
+.ed-doc { padding: 10px 14px 18px; min-height: 160px; }
+.blk { padding: 3px 4px; border-radius: 6px; outline: none; line-height: 1.55; overflow-wrap: anywhere; }
+.blk[contenteditable="true"]:focus { background: #fbf7fc; }
+.blk[contenteditable="true"]:empty::before { content: attr(data-ph); color: #9a8fa0; pointer-events: none; }
+.blk-h1 { font: 700 24px/1.3 'Chakra Petch', sans-serif; color: #6a0f7a; margin-top: 8px; }
+.blk-h2 { font: 700 18px/1.3 'Chakra Petch', sans-serif; color: #6a0f7a; margin-top: 12px; }
+.blk-li { padding-left: 24px; position: relative; }
+.blk-li::before { content: "\2022"; position: absolute; left: 8px; color: #6a0f7a; }
+.blk-task { margin: 8px 0; padding: 10px; border: 1px solid #d9c3e0; border-left: 4px solid #c42fc4; border-radius: 8px; background: #fdf9fe; }
+.blk-task.done { border-left-color: #2e7d32; background: #f5fbf5; }
+.blk-task.bad { border-color: #d33; border-left-color: #d33; background: #fdeceb; }
+.tk-grid { display: grid; grid-template-columns: 1.1fr 1.6fr 1.1fr 1fr auto; gap: 8px; align-items: end; }
+.tk-grid label { display: grid; gap: 2px; font-size: 11.5px; font-weight: 700; color: #6a0f7a; }
+.tk-grid input { width: 100%; box-sizing: border-box; min-height: 34px; font-weight: 400; }
+.tk-side { display: flex; gap: 6px; align-items: center; }
+.tk-err { color: #b3261e; font-size: 12.5px; margin-top: 4px; }
+.tk-err:empty { display: none; }
+.slashmenu { position: fixed; z-index: 60; width: 290px; max-height: 260px; overflow: auto; background: #fff; border: 1px solid #d9c3e0; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 4px; }
+.slashmenu[hidden] { display: none; }
+.slashmenu button { display: grid; gap: 1px; width: 100%; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; cursor: pointer; font: inherit; }
+.slashmenu button span { font-size: 12px; color: #6b5f73; }
+.slashmenu button.on, .slashmenu button:hover { background: #f1e3f4; }
+@media (max-width: 760px) { .tk-grid { grid-template-columns: 1fr 1fr; } .tk-side { grid-column: 1 / -1; } }
