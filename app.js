@@ -493,7 +493,13 @@ function renderProjects() {
         const { error } = await sb.from('projects').update({ closed_at: new Date().toISOString() }).eq('id', p.id);
         if (error) return toast(error.message); await loadAll(); renderProjects(); toast('Đã hoàn thành sự kiện. Log sẽ được lưu vào Drive của Niffler.');
       } }, 'Hoàn thành sự kiện');
-    return h('tr', {}, h('td', {}, p.name), h('td', {}, `${done}/${n} việc xong`), h('td', {}, p.closed_at ? 'Đã hoàn thành ' + fmt(p.closed_at) : 'Đang chạy'), h('td', {}, act));
+    const del = h('button', { class: 'btn', style: 'margin-left:8px', onclick: async (e) => {
+      if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = `Bấm lần nữa để xoá sự kiện${n ? ` và ${n} việc` : ''}`; return; }
+      const r1 = await sb.from('tasks').delete().eq('project_id', p.id); if (r1.error) return toast(r1.error.message);
+      const r2 = await sb.from('projects').delete().eq('id', p.id); if (r2.error) return toast(r2.error.message);
+      await loadAll(); renderProjects(); toast('Đã xoá sự kiện' + (p.drive_url ? '. Log trong Drive vẫn được giữ.' : ''));
+    } }, 'Xoá');
+    return h('tr', {}, h('td', {}, p.name), h('td', {}, `${done}/${n} việc xong`), h('td', {}, p.closed_at ? 'Đã hoàn thành ' + fmt(p.closed_at) : 'Đang chạy'), h('td', {}, act, del));
   };
   const rows = [...S.projects].sort((a, b) => !!a.closed_at - !!b.closed_at || a.name.localeCompare(b.name, 'vi'));
   $('#view').replaceChildren(head('Sự kiện'),
