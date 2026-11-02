@@ -186,3 +186,10 @@ tr.bad td { background: var(--red-wash); }
 .who .btn.rename:hover { background: rgba(255,255,255,.28); }
 
 .evtag { font-size: 11px; font-weight: 700; color: #6a0f7a; background: #f1e3f4; border-radius: 4px; padding: 1px 6px; margin-bottom: 4px; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.usage { display: flex; gap: 20px; flex-wrap: wrap; padding: 6px 16px; background: #faf5fb; border-bottom: 1px solid #e6dcea; font-size: 12px; }
+.usage:empty { display: none; }
+.ubar { flex: 1; min-width: 220px; max-width: 360px; }
+.ubar .track { height: 6px; border-radius: 3px; background: #e6dcea; margin-top: 3px; overflow: hidden; }
+.ubar i { display: block; height: 100%; background: #6a0f7a; }
+.ubar.warn i { background: #d33; }

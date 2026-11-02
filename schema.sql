@@ -252,3 +252,12 @@ begin
   end if;
   return new;
 end $$;
+
+-- ---------- PHẦN 3: dung lượng đã dùng (chỉ admin gọi được) ----------
+create or replace function storage_usage() returns jsonb language sql stable security definer set search_path = public, storage as $$
+  select case when is_admin() then jsonb_build_object(
+    'files', coalesce((select sum((metadata->>'size')::bigint) from storage.objects where bucket_id = 'files'), 0),
+    'db', pg_database_size(current_database())) end
+$$;
+revoke all on function storage_usage() from public;
+grant execute on function storage_usage() to authenticated;

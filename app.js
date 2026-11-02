@@ -129,9 +129,18 @@ function renderShell() {
       h('nav', { class: 'tabs', 'aria-label': 'Chức năng' }, tabs.map(([k, l]) => h('button', { class: 'tab', 'data-tab': k, onclick: () => { S.view = k; renderShell(); } }, l))),
       h('div', { class: 'who' }, h('span', {}, S.me.name), h('button', { class: 'btn rename', onclick: () => nameDialog(false) }, svg(ICON.pencil), ' Đổi tên'), isAdmin() && h('span', { class: 'role' }, 'Admin'),
         h('button', { class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))),
+    isAdmin() && h('div', { class: 'usage', id: 'usage' }),
     h('main', { id: 'view' }));
+  isAdmin() && showUsage();
   document.querySelectorAll('.tab').forEach((b) => b.dataset.tab === S.view && b.setAttribute('aria-current', 'page'));
   renderView();
+}
+// Dung lượng gói Free của Supabase (1 GB file, 500 MB database); số liệu từ RPC storage_usage (chỉ admin).
+async function showUsage() {
+  const { data, error } = await sb.rpc('storage_usage'), box = $('#usage'); if (error || !data || !box) return;
+  const mb = (b) => b >= 2 ** 30 ? (b / 2 ** 30).toFixed(2) + ' GB' : (b / 2 ** 20).toFixed(1) + ' MB';
+  const bar = (label, used, max) => { const pct = Math.min(100, (used / max) * 100); return h('div', { class: 'ubar' + (pct > 80 ? ' warn' : '') }, h('span', {}, `${label}: ${mb(used)} / ${mb(max)} (${pct.toFixed(1)}%)`), h('div', { class: 'track', role: 'progressbar', 'aria-label': label, 'aria-valuenow': Math.round(pct), 'aria-valuemin': 0, 'aria-valuemax': 100 }, h('i', { style: `width:${pct}%` }))); };
+  box.replaceChildren(bar('File (Storage)', +data.files, 2 ** 30), bar('Database', +data.db, 500 * 2 ** 20));
 }
 function renderView() {
   ({ board: renderBoard, timeline: renderTimeline, meetings: renderMeetings, guide: renderGuide, templates: renderTemplates, projects: renderProjects, members: renderMembers }[S.view])();
