@@ -49,7 +49,7 @@ Tab **Timeline**: thêm **mốc sự kiện** (hạn nộp hồ sơ, ngày diễ
 ## 7. Email tự động
 `niffler.hugo@gmail.com` tự gửi (nội dung tiếng Anh):
 - Cho người được giao: khi việc còn dưới 24 giờ đến hạn và chưa xong (kiểm mỗi giờ).
-- Cho tất cả admin: **trong khoảng 1 phút sau khi việc trễ hạn** (kiểm mỗi phút), một mail tổng hợp nếu nhiều việc trễ cùng lúc; mỗi việc báo một lần, dời hạn thì được tính lại.
+- Khi việc **trễ hạn**, trong khoảng 1 phút (kiểm mỗi phút): **người được giao** nhận mail báo trễ (một mail gộp nếu họ có nhiều việc trễ), và **tất cả admin** nhận một mail tổng hợp. Người vừa là admin vừa là người được giao chỉ nhận mail tổng hợp. Mỗi việc báo một lần, dời hạn thì được tính lại.
 - Log sự kiện trong Drive được tạo trong khoảng 1 phút sau khi bấm Hoàn thành sự kiện.
 - **Không có mail khi giao việc** (cố ý, để giao nhầm không gây rối; người nhận thấy việc ngay trong Bảng việc).
 

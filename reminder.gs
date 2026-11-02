@@ -55,19 +55,35 @@ function tick() {
   try { exportLogs_(); } catch (e) { console.error('exportLogs', e); }
 }
 
-// Báo admin: đã trễ hạn, chưa xong, chưa báo — 1 mail tổng hợp (không gửi mail khi giao việc, chủ ý).
+// Việc đã trễ hạn, chưa xong, chưa báo: báo NGƯỜI ĐƯỢC GIAO (mỗi người một mail, gộp các việc của họ) và báo ADMIN (một mail tổng hợp).
+// Không gửi mail khi giao việc (chủ ý). Người vừa là admin vừa là người được giao chỉ nhận mail tổng hợp của admin.
 function notifyLate_() {
   const now = new Date(), sel = 'id,title,deadline,profiles(name,email)';
   const late = api_('tasks?select=' + sel + '&status=neq.done&overdue_notified=eq.false&deadline=lt.' + now.toISOString() + '&order=deadline');
-  if (late.length) {
-    const admins = api_('profiles?select=email&role=eq.admin').map((a) => a.email);
-    if (admins.length) {
-      const rows = late.map((t) => '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">' + esc_(t.profiles.name) + '</td><td style="padding:4px 8px;border-bottom:1px solid #eee">' + esc_(t.title) + '</td><td style="padding:4px 8px;border-bottom:1px solid #eee">' + fmt_(t.deadline) + '</td></tr>').join('');
-      MailApp.sendEmail({ to: admins.join(','), name: SENDER, subject: late.length + (late.length > 1 ? ' tasks are' : ' task is') + ' overdue',
-        htmlBody: shell_('<p><b>' + late.length + (late.length > 1 ? ' tasks have' : ' task has') + '</b> passed the deadline without being completed:</p><table style="border-collapse:collapse;font-size:14px"><tr><th align="left" style="padding:4px 8px">Assignee</th><th align="left" style="padding:4px 8px">Task</th><th align="left" style="padding:4px 8px">Deadline</th></tr>' + rows + '</table>', 9) });
-      late.forEach((t) => { try { api_('tasks?id=eq.' + t.id, 'patch', { overdue_notified: true }); } catch (e) { console.error('late ' + t.id, e); } });
-    }
+  if (!late.length) return;
+  const admins = api_('profiles?select=email&role=eq.admin').map((a) => a.email);
+  const th = (x) => '<th align="left" style="padding:4px 8px">' + x + '</th>', td = (x) => '<td style="padding:4px 8px;border-bottom:1px solid #eee">' + x + '</td>';
+  const plural = (n, one, many) => n + ' ' + (n > 1 ? many : one);
+
+  // 1) Admin: một mail tổng hợp. Nếu gửi lỗi thì ném lỗi ngay: chưa gửi gì, chưa đánh dấu gì, phút sau thử lại.
+  if (admins.length) {
+    const rows = late.map((t) => '<tr>' + td(esc_(t.profiles.name)) + td(esc_(t.title)) + td(fmt_(t.deadline)) + '</tr>').join('');
+    MailApp.sendEmail({ to: admins.join(','), name: SENDER, subject: plural(late.length, 'task is', 'tasks are') + ' overdue',
+      htmlBody: shell_('<p><b>' + plural(late.length, 'task has', 'tasks have') + '</b> passed the deadline without being completed:</p><table style="border-collapse:collapse;font-size:14px"><tr>' + th('Assignee') + th('Task') + th('Deadline') + '</tr>' + rows + '</table>', 9) });
   }
+
+  // 2) Người được giao: mỗi người một mail liệt kê việc trễ của họ (lỗi một người không chặn người khác).
+  const by = {};
+  late.forEach((t) => { const e = t.profiles.email; if (admins.indexOf(e) < 0) (by[e] = by[e] || { name: t.profiles.name, tasks: [] }).tasks.push(t); });
+  Object.keys(by).forEach((email) => {
+    try {
+      const p = by[email], rows = p.tasks.map((t) => '<tr>' + td(esc_(t.title)) + td(fmt_(t.deadline)) + '</tr>').join('');
+      MailApp.sendEmail({ to: email, name: SENDER, subject: 'Overdue: ' + (p.tasks.length > 1 ? p.tasks.length + ' of your tasks' : p.tasks[0].title),
+        htmlBody: shell_('<p>Hi ' + esc_(p.name) + ',</p><p>' + (p.tasks.length > 1 ? 'These tasks have' : 'This task has') + ' passed the deadline and ' + (p.tasks.length > 1 ? 'are' : 'is') + ' not marked as done yet:</p><table style="border-collapse:collapse;font-size:14px"><tr>' + th('Task') + th('Deadline') + '</tr>' + rows + '</table><p>Please finish it and upload a proof file, or tell an admin if you need more time.</p>', 11) });
+    } catch (e) { console.error('late mail ' + email, e); }
+  });
+
+  late.forEach((t) => { try { api_('tasks?id=eq.' + t.id, 'patch', { overdue_notified: true }); } catch (e) { console.error('late ' + t.id, e); } });
 }
 
 // Sự kiện đã "Hoàn thành" trên web (closed_at) mà chưa có drive_url: tạo Google Doc log trong Drive của tài khoản này.
