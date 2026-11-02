@@ -126,6 +126,25 @@ function subscribe() {
 ['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => { if (!e.target.closest?.('[data-drop]')) e.preventDefault(); }));
 
 /* ---------- khung trang ---------- */
+// Ngoài thanh trên chỉ hiện tên + vai trò; đổi tên, ngôn ngữ, đăng xuất nằm trong menu cài đặt này.
+function settingsMenu() {
+  const menu = h('div', { class: 'setmenu', role: 'menu', hidden: true });
+  const btn = h('button', { class: 'whobtn', title: 'Cài đặt', 'aria-haspopup': 'menu', 'aria-expanded': 'false', onclick: (e) => { e.stopPropagation(); toggle(); } },
+    h('span', {}, S.me.name), isAdmin() && h('span', { class: 'role' }, 'Admin'), h('span', { class: 'caret', 'aria-hidden': 'true' }, '\u25BE'));
+  const away = (e) => { if (!menu.contains(e.target)) close(); }, esc = (e) => { if (e.key === 'Escape') { close(); btn.focus(); } };
+  function close() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', away); document.removeEventListener('keydown', esc); }
+  function toggle() {
+    if (!menu.hidden) return close();
+    menu.hidden = false; btn.setAttribute('aria-expanded', 'true'); setTimeout(() => { document.addEventListener('click', away); document.addEventListener('keydown', esc); });
+    menu.querySelector('button')?.focus();
+  }
+  const lang = (l, label) => h('button', { role: 'menuitemradio', 'aria-checked': LANG === l ? 'true' : 'false', class: LANG === l ? 'on' : '', onclick: () => { setLang(l); renderShell(); } }, label);
+  menu.append(
+    h('button', { role: 'menuitem', onclick: () => { close(); nameDialog(false); } }, svg(ICON.pencil), ' Đổi tên'),
+    h('div', { class: 'setrow', role: 'group', 'aria-label': 'Ngôn ngữ' }, h('span', {}, 'Ngôn ngữ'), lang('vi', 'Tiếng Việt'), lang('en', 'English')),
+    h('button', { role: 'menuitem', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'));
+  return h('div', { class: 'who' }, btn, menu);
+}
 const TABS = [['board', 'Bảng việc'], ['timeline', 'Timeline'], ['meetings', 'Log họp'], ['guide', 'Hướng dẫn'], ['templates', 'Tải mẫu']];
 function renderShell() {
   const tabs = [...TABS, ...(isAdmin() ? [['projects', 'Sự kiện'], ['members', 'Thành viên']] : [])];
@@ -133,8 +152,7 @@ function renderShell() {
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, h('img', { src: 'assets/logo.png', alt: '' }), h('span', {}, 'Niffler')),
       h('nav', { class: 'tabs', 'aria-label': 'Chức năng' }, tabs.map(([k, l]) => h('button', { class: 'tab', 'data-tab': k, onclick: () => { S.view = k; renderShell(); } }, l))),
-      h('div', { class: 'who' }, h('span', {}, S.me.name), h('button', { class: 'btn rename', onclick: () => nameDialog(false) }, svg(ICON.pencil), ' Đổi tên'), isAdmin() && h('span', { class: 'role' }, 'Admin'),
-        langBtn(), h('button', { class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))),
+      settingsMenu()),
     isAdmin() && h('div', { class: 'usage', id: 'usage' }),
     h('main', { id: 'view' }));
   isAdmin() && showUsage();

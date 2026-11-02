@@ -240,3 +240,17 @@ tr.bad td { background: var(--red-wash); }
 .ed { font-weight: 400; }
 .blk.locked { opacity: .7; outline: 1px dashed #c42fc4; position: relative; }
 .blk.locked::after { content: attr(data-locktext); position: absolute; right: 6px; top: 2px; font-size: 11px; font-weight: 700; color: #fff; background: #c42fc4; padding: 1px 8px; border-radius: 10px; }
+
+/* menu cài đặt (tên + vai trò ở thanh trên) */
+.who { position: relative; }
+.whobtn { display: flex; align-items: center; gap: 8px; background: none; border: 1px solid transparent; border-radius: 999px; color: #fff; padding: 3px 10px; font: inherit; cursor: pointer; }
+.whobtn:hover, .whobtn[aria-expanded="true"] { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.35); }
+.whobtn .caret { font-size: 11px; opacity: .85; }
+.setmenu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 70; min-width: 230px; display: grid; gap: 2px; padding: 6px; background: #fff; color: var(--ink, #1f1a24); border: 1px solid #d9c3e0; border-radius: 12px; box-shadow: 0 14px 40px rgba(0,0,0,.28); }
+.setmenu[hidden] { display: none; }
+.setmenu button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 8px 10px; font: inherit; color: inherit; cursor: pointer; }
+.setmenu button:hover, .setmenu button:focus-visible { background: #f1e3f4; outline: none; }
+.setrow { display: flex; align-items: center; gap: 6px; padding: 6px 10px; flex-wrap: wrap; border-top: 1px solid #efe6f2; border-bottom: 1px solid #efe6f2; margin: 2px 0; }
+.setrow > span { flex: 1 0 100%; font-size: 12px; font-weight: 700; color: #6a0f7a; }
+.setrow button { width: auto; flex: 1; justify-content: center; border: 1px solid #d9c3e0; }
+.setrow button.on { background: #6a0f7a; color: #fff; border-color: #6a0f7a; }
