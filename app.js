@@ -119,8 +119,9 @@ async function loadAll() {
 }
 function subscribe() {
   let timer;
-  const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { await loadAll(); renderView(); if (S.openTask) loadDrawerLists(S.openTask); }, 250); };
-  sb.channel('db').on('postgres_changes', { event: '*', schema: 'public' }, refresh).subscribe();
+  // Trang Log họp (admin): không vẽ lại cả trang khi có thay đổi, kẻo mất bản nháp đang soạn; chỉ vẽ lại danh sách khi không có log nào đang sửa.
+  const refresh = () => { clearTimeout(timer); timer = setTimeout(async () => { await loadAll(); if (S.view === 'meetings' && isAdmin()) { if (!S.editing) S.meetingsDraw?.(); } else renderView(); if (S.openTask) loadDrawerLists(S.openTask); }, 250); };
+  sb.channel('db').on('postgres_changes', { event: '*', schema: 'public' }, (p) => { if (p.table !== 'meeting_blocks') refresh(); }).subscribe();
 }
 ['dragover', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => { if (!e.target.closest?.('[data-drop]')) e.preventDefault(); }));
 
@@ -511,11 +512,15 @@ function renderMeetings() {
   const list = h('div', {});
   const draw = () => {
     const k = q.value.trim().toLowerCase(), ms = S.meetings.filter((m) => !k || (m.title + m.body_md).toLowerCase().includes(k));
-    list.replaceChildren(...(ms.length ? ms.map((m) => h('article', { class: 'meeting' }, h('header', {}, h('h2', {}, m.title), h('span', { class: 'muted' }, new Date(m.held_on).toLocaleDateString(LOCALE())),
-      isAdmin() && h('button', { class: 'btn', style: 'margin-left:auto', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr('Bấm lần nữa để xoá'); return; } await sb.from('meetings').delete().eq('id', m.id); await loadAll(); draw(); } }, 'Xoá')),
-      h('div', { class: 'prose', html: md(m.body_md) }))) : [h('p', { class: 'muted' }, 'Chưa có log họp nào.')]));
+    list.replaceChildren(...(ms.length ? ms.map((m) => {
+      const art = h('article', { class: 'meeting' }, h('header', {}, h('h2', {}, m.title), h('span', { class: 'muted' }, new Date(m.held_on).toLocaleDateString(LOCALE())),
+        isAdmin() && h('button', { class: 'btn', style: 'margin-left:auto', onclick: () => editLog(m, art, draw) }, 'Sửa'),
+        isAdmin() && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr('Bấm lần nữa để xoá'); return; } await sb.from('meetings').delete().eq('id', m.id); await loadAll(); draw(); } }, 'Xoá')),
+        h('div', { class: 'prose', html: md(m.body_md) }));
+      return art;
+    }) : [h('p', { class: 'muted' }, 'Chưa có log họp nào.')]));
   };
-  q.oninput = draw;
+  q.oninput = draw; S.meetingsDraw = draw; S.editing = null;
   v.replaceChildren(head('Log họp', q), isAdmin() && meetingForm(draw), list); draw();
 }
 const tplFile = () => `templates/mau-log-hop${LANG === 'en' ? '.en' : ''}.md`;
@@ -532,6 +537,59 @@ function validateTasks(ed, blocks) {
   return { ok: !bad, good };
 }
 const blankTask = (b) => b.type === 'task' && !b.task_id && !b.content.who && !b.content.whoText && !b.content.title;
+// Log cũ chỉ có body_md: chuyển thành khối một lần (người đến trước giành quyền chuyển, người sau chờ khối xuất hiện).
+async function ensureBlocks(m) {
+  if (m.blocks_ready) return;
+  const claim = await sb.from('meetings').update({ blocks_ready: true }).eq('id', m.id).eq('blocks_ready', false).select('id');
+  if (claim.error) throw claim.error;
+  if (claim.data?.length) {
+    const bl = mdToBlocks(m.body_md), r = await sb.from('meeting_blocks').insert(bl.map((b, i) => ({ id: b.id, meeting_id: m.id, pos: i + 1, type: b.type, content: b.content, task_id: b.task_id, updated_by: S.me.id })));
+    if (r.error) { await sb.from('meetings').update({ blocks_ready: false }).eq('id', m.id); throw r.error; }
+  } else for (let i = 0; i < 10; i++) { const { data } = await sb.from('meeting_blocks').select('id').eq('meeting_id', m.id).limit(1); if (data?.length) break; await new Promise((r) => setTimeout(r, 500)); }
+}
+// Sửa log đã lưu ngay tại chỗ: mỗi thay đổi tự lưu theo khối, nhiều admin cùng sửa được; "Xong" tạo việc cho thẻ mới và cập nhật bản đọc.
+async function editLog(m, art, draw) {
+  if (S.editing) return toast(L2('Đang sửa một log khác, bấm Xong ở log đó trước.', 'Another log is being edited, click Done there first.'));
+  S.editing = { id: m.id };
+  try {
+    await ensureBlocks(m);
+    const { data: rows, error } = await sb.from('meeting_blocks').select('*').eq('meeting_id', m.id).order('pos'); if (error) throw error;
+    const date = h('input', { type: 'date', required: true, value: m.held_on }), title = h('input', { required: true, value: m.title }), who = h('span', { class: 'muted' });
+    const done = h('button', { class: 'btn primary', type: 'button' }, 'Xong'), close = h('button', { class: 'btn', type: 'button' }, 'Đóng');
+    let busy = false, sync; const ed = blockEditor({ onChange: () => {
+      const n = ed.read().filter((b) => b.type === 'task' && !b.task_id && !blankTask(b)).length;
+      done.textContent = n ? L2(`Xong và giao ${n} việc`, `Done and assign ${n} task${n === 1 ? '' : 's'}`) : tr('Xong');
+    } });
+    ed.setBlocks(rows.length ? rows : [{ id: crypto.randomUUID(), type: 'p', content: {} }]);
+    sync = syncEditor(ed, m.id, rows, (names) => { who.textContent = names.length ? L2('Đang soạn: ', 'Editing now: ') + names.join(', ') : ''; });
+    const finish = async (msg, createTasks) => {
+      if (busy) return; busy = true; done.disabled = close.disabled = true;
+      try {
+        ed.pruneBlankTasks(); await sync.flush(); const all = ed.read(); let made = 0;
+        const ttl = title.value.trim() || m.title;
+        if (createTasks) {
+          const { ok, good } = validateTasks(ed, all);
+          if (!ok) { toast(L2('Có thẻ giao việc chưa hợp lệ, xem chữ đỏ trong thẻ.', 'Some task cards are not valid, see the red text in the cards.')); return; }
+          good.forEach((g) => { g.description = L2(`Giao từ log họp: ${ttl}`, `Assigned from meeting log: ${ttl}`); });
+          if (good.length) {
+            await assignTasks(good);
+            for (const g of good) {                                           // giành khối: chỉ một người tạo được việc cho một thẻ
+              const r = await sb.rpc('claim_block', { p_id: g.blockId, p_task: g.id });
+              if (r.error) { await sb.from('tasks').delete().in('id', good.map((x) => x.id)); throw r.error; }
+              if (r.data) made++; else await sb.from('tasks').delete().eq('id', g.id);   // người khác đã giao thẻ này rồi: bỏ bản trùng
+            }
+          }
+        }
+        const u = await sb.from('meetings').update({ title: ttl, held_on: date.value, body_md: blocksToMd(ed.read()), updated_at: new Date().toISOString() }).eq('id', m.id); if (u.error) throw u.error;
+        await sync.stop(); S.editing = null; await loadAll(); draw();
+        toast(made ? L2(`Đã lưu log và giao ${made} việc`, `Log saved and ${made} task${made === 1 ? '' : 's'} assigned`) : msg);
+      } catch (x) { toast('Lỗi: ' + x.message); } finally { busy = false; done.disabled = close.disabled = false; }
+    };
+    done.onclick = () => finish('Đã lưu log họp', true); close.onclick = () => finish('Đã lưu log họp', false);
+    art.replaceChildren(h('header', {}, h('h2', {}, 'Sửa log họp'), who), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, h('label', { class: 'field' }, 'Ngày họp', date), h('label', { class: 'field', style: 'flex:1;min-width:200px' }, 'Tiêu đề', title)),
+      h('p', { class: 'muted' }, 'Thay đổi tự lưu theo từng khối. Người khác cũng mở được log này; khối ai đang gõ sẽ chỉ đọc với người còn lại.'), ed.root, h('div', { class: 'actions' }, close, done));
+  } catch (x) { S.editing = null; toast('Lỗi: ' + x.message); }
+}
 function meetingForm(redraw) {
   const date = h('input', { type: 'date', required: true, value: new Date().toISOString().slice(0, 10) }), title = h('input', { required: true, placeholder: 'Họp tuần 12' });
   const save = h('button', { class: 'btn primary', type: 'submit' }, 'Lưu log họp'); let busy = false;

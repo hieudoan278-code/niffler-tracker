@@ -286,3 +286,28 @@ alter table meeting_blocks enable row level security;
 create policy read_blocks on meeting_blocks for select using (me() is not null);
 create policy admin_blocks on meeting_blocks for all using (is_admin()) with check (is_admin());
 alter publication supabase_realtime add table meeting_blocks;
+
+-- =====================================================================
+-- PHẦN 5: khoá mềm theo khối + giành khối giao việc (sửa log / nhiều admin cùng soạn).
+-- =====================================================================
+alter table meeting_blocks replica identity full;   -- để sự kiện xoá lọc được theo meeting_id
+
+create or replace function lock_block(p_id uuid, p_token text) returns boolean language plpgsql as $$
+declare n int;
+begin
+  update meeting_blocks set lock_by = me(), lock_token = p_token, lock_until = now() + interval '30 seconds'
+   where id = p_id and (lock_until is null or lock_until < now() or lock_token = p_token);
+  get diagnostics n = row_count; return n > 0;
+end $$;
+create or replace function unlock_block(p_id uuid, p_token text) returns void language sql as $$
+  update meeting_blocks set lock_by = null, lock_token = null, lock_until = null where id = p_id and lock_token = p_token
+$$;
+-- chỉ một người "giành" được khối chưa có việc: tránh tạo việc trùng khi hai admin lưu cùng lúc
+create or replace function claim_block(p_id uuid, p_task uuid) returns boolean language plpgsql as $$
+declare n int;
+begin
+  update meeting_blocks set task_id = p_task where id = p_id and task_id is null;
+  get diagnostics n = row_count; return n > 0;
+end $$;
+revoke all on function lock_block(uuid, text), unlock_block(uuid, text), claim_block(uuid, uuid) from public;
+grant execute on function lock_block(uuid, text), unlock_block(uuid, text), claim_block(uuid, uuid) to authenticated;

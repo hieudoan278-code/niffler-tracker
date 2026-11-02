@@ -62,7 +62,7 @@ function mdToBlocks(mdText) {
 function blockEditor(opts = {}) {
   const doc = h('div', { class: 'ed-doc', 'data-drop': '' }), menu = h('div', { class: 'slashmenu', role: 'listbox', hidden: true });
   let last = null, items = [], idx = 0, pick = null, composing = false;
-  const change = () => opts.onChange?.();
+  const ls = [], change = () => { opts.onChange?.(); ls.forEach((f) => f()); };
   const PH = () => ({ h1: L2('Tiêu đề', 'Title'), h2: L2('Tiêu đề mục', 'Heading'), p: L2('Gõ nội dung, hoặc gõ / để chọn lệnh', 'Type here, or / for commands'), li: L2('Mục', 'Item') });
   const blocks = () => [...doc.children];
   const isText = (el) => el && TEXT_TYPES.includes(el.dataset.type);
@@ -72,6 +72,7 @@ function blockEditor(opts = {}) {
   function makeBlock(b) {
     if (b.type === 'task') return makeTask(b);
     const el = h('div', { class: `blk blk-${b.type}`, 'data-id': b.id || uid(), 'data-type': b.type, contenteditable: 'true', 'data-ph': PH()[b.type], role: 'textbox', 'aria-multiline': 'true' });
+    if (b.pos != null) el.dataset.pos = b.pos;
     el.innerHTML = inlineToHtml(b.content?.t); return el;
   }
   function makeTask(b) {
@@ -94,6 +95,7 @@ function blockEditor(opts = {}) {
     who.addEventListener('focus', () => suggestWho(who));
     who.addEventListener('blur', () => { setTimeout(closeMenu, 120); if (!who.dataset.pid) who.dataset.pid = resolveName(who.value); });
     [title, dl, ev].forEach((i) => i.addEventListener('input', change));
+    if (b.pos != null) el.dataset.pos = b.pos;
     return el;
   }
   const resolveName = (txt) => { const k = fold(txt).trim(); if (!k) return ''; const m = S.profiles.filter((p) => fold(p.name) === k || fold(p.email) === k); return m.length === 1 ? m[0].id : ''; };
@@ -246,10 +248,104 @@ function blockEditor(opts = {}) {
       const [t] = emptyText ? replaceWith(el, [{ id: uid(), type: 'task', content: {} }]) : insertAfter(el, [{ id: uid(), type: 'task', content: {} }]);
       if (!t.nextElementSibling) t.after(makeBlock({ id: uid(), type: 'p', content: {} })); place(t); change();
     }, 'hot'));
+  // khoá mềm: khối người khác đang sửa chỉ đọc, kèm nhãn tên
+  function setLock(id, lock) {
+    const el = doc.querySelector(`[data-id="${id}"]`); if (!el) return;
+    el.classList.toggle('locked', !!lock); el.inert = !!lock;
+    if (lock) el.dataset.locktext = `${lock.name} ${L2('đang sửa', 'is editing')}`; else delete el.dataset.locktext;
+  }
+  // áp thay đổi từ người khác (realtime) vào đúng khối; khối mình đang gõ thì không bị ghi đè
+  const remote = {
+    upsert(row) {
+      const el = doc.querySelector(`[data-id="${row.id}"]`);
+      if (!el) { const nb = makeBlock(row), before = blocks().filter((c) => +c.dataset.pos < row.pos).pop(); before ? before.after(nb) : doc.prepend(nb); return; }
+      el.dataset.pos = row.pos;
+      const same = JSON.stringify(readBlock(el).content) === JSON.stringify(row.content) && (el.dataset.taskId || null) === (row.task_id || null) && el.dataset.type === row.type;
+      if (same || el.contains(document.activeElement)) return;
+      if (row.type === 'task' || el.dataset.type === 'task') { el.replaceWith(makeBlock(row)); return; }
+      setType(el, row.type); el.innerHTML = inlineToHtml(row.content?.t);
+    },
+    remove(id) { doc.querySelector(`[data-id="${id}"]`)?.remove(); ensureOne(); },
+  };
+  const pruneBlankTasks = () => { blocks().filter((el) => el.dataset.type === 'task' && !el.dataset.taskId && !readTask(el).who && !readTask(el).whoText && !readTask(el).title).forEach((el) => el.remove()); ensureOne(); };
   const root = h('div', { class: 'ed' }, bar, doc, menu);
   ensureOne();
   return {
-    root, read, setBlocks, focus: () => place(doc.firstElementChild, false),
+    root, doc, read, setBlocks, setLock, remote, pruneBlankTasks, on: (f) => ls.push(f), focus: () => place(doc.firstElementChild, false),
     mark: (id, msg) => { const el = doc.querySelector(`[data-id="${id}"]`); if (!el) return; el.classList.toggle('bad', !!msg); const e = el.querySelector('.tk-err'); if (e) e.textContent = msg || ''; },
+  };
+}
+
+
+/* ---------- đồng bộ nhiều người cùng soạn (theo khối) ---------- */
+const TOKEN = uid();   // mỗi tab một mã: hai tab cùng tài khoản cũng thấy khoá của nhau
+function syncEditor(ed, meetingId, rows, onPresence) {
+  const known = new Map(rows.map((r) => [r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos }])), locks = new Map();
+  let timer = null, flushing = null, dirty = false, lockedEl = null, stopped = false;
+  const pres = () => onPresence?.([...new Set([...locks.values()].filter((l) => l.until > Date.now()).map((l) => l.name))]);
+  const rpc = (fn, a) => sb.rpc(fn, a);
+
+  async function flush() {
+    clearTimeout(timer);
+    if (flushing) { dirty = true; return flushing; }
+    flushing = (async () => {
+      do {
+        dirty = false;
+        const els = [...ed.doc.children], cur = ed.read(), ins = [], upd = [];
+        for (let i = 0; i < els.length; i++) if (!els[i].dataset.pos) {            // khối mới: vị trí nằm giữa hai khối kề
+          const a = i ? +els[i - 1].dataset.pos : 0; let j = i + 1; while (j < els.length && !els[j].dataset.pos) j++;
+          els[i].dataset.pos = (a + (j < els.length ? +els[j].dataset.pos : a + 2)) / 2;
+        }
+        const ids = new Set(cur.map((b) => b.id));
+        cur.forEach((b, i) => {
+          const c = JSON.stringify(b.content), k = known.get(b.id), pos = +els[i].dataset.pos;
+          if (!k) ins.push({ id: b.id, meeting_id: meetingId, pos, type: b.type, content: b.content, task_id: b.task_id, updated_by: S.me.id, _c: c });
+          else if (k.type !== b.type || k.c !== c) upd.push({ b, c, pos });
+        });
+        const del = [...known.keys()].filter((id) => !ids.has(id));
+        if (ins.length) {
+          const { error } = await sb.from('meeting_blocks').insert(ins.map(({ _c, ...r }) => r)); if (error) throw error;
+          ins.forEach((r) => known.set(r.id, { type: r.type, c: r._c, pos: r.pos }));
+          const ae = document.activeElement?.closest?.('.blk');                      // đang đứng trong khối vừa lưu: giữ khoá cho nó
+          if (ae && ins.some((r) => r.id === ae.dataset.id)) { lockedEl = ae; await rpc('lock_block', { p_id: ae.dataset.id, p_token: TOKEN }); }
+        }
+        for (const u of upd) {
+          const { error } = await sb.from('meeting_blocks').update({ type: u.b.type, content: u.b.content, updated_by: S.me.id, updated_at: new Date().toISOString() }).eq('id', u.b.id);
+          if (error) throw error; known.set(u.b.id, { type: u.b.type, c: u.c, pos: u.pos });
+        }
+        if (del.length) { const { error } = await sb.from('meeting_blocks').delete().in('id', del); if (error) throw error; del.forEach((id) => known.delete(id)); }
+      } while (dirty);
+    })().catch((e) => toast('Lỗi lưu: ' + e.message)).finally(() => { flushing = null; });
+    return flushing;
+  }
+  const schedule = () => { if (stopped) return; clearTimeout(timer); timer = setTimeout(flush, 500); };
+  ed.on(schedule);
+
+  // nhận thay đổi của người khác
+  const ch = sb.channel('mb-' + meetingId + '-' + TOKEN.slice(0, 8)).on('postgres_changes', { event: '*', schema: 'public', table: 'meeting_blocks', filter: `meeting_id=eq.${meetingId}` }, (p) => {
+    if (stopped) return;
+    if (p.eventType === 'DELETE') { const id = p.old.id; known.delete(id); locks.delete(id); ed.remote.remove(id); pres(); return; }
+    const r = p.new, mine = r.lock_token === TOKEN, live = r.lock_token && !mine && new Date(r.lock_until) > new Date();
+    if (live) locks.set(r.id, { name: pmap()[r.lock_by]?.name || '?', until: +new Date(r.lock_until) }); else locks.delete(r.id);
+    ed.remote.upsert(r); known.set(r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos });
+    ed.setLock(r.id, live ? locks.get(r.id) : null); pres();
+  }).subscribe();
+
+  // khoá mềm: lấy khoá khi vào khối, gia hạn 15 giây/lần, nhả khi rời khối
+  async function release() { if (!lockedEl) return; const id = lockedEl.dataset.id; lockedEl = null; if (known.has(id)) await rpc('unlock_block', { p_id: id, p_token: TOKEN }); }
+  ed.doc.addEventListener('focusin', async (e) => {
+    const el = e.target.closest('.blk'); if (!el || el === lockedEl || stopped) return;
+    await release(); if (!known.has(el.dataset.id)) { lockedEl = el; return; }       // khối mới chưa lưu: của mình
+    const { data, error } = await rpc('lock_block', { p_id: el.dataset.id, p_token: TOKEN });
+    if (!error && data === true) lockedEl = el;
+    else if (!error) { ed.setLock(el.dataset.id, locks.get(el.dataset.id) || { name: '?' }); toast(L2('Khối này đang được người khác sửa.', 'Someone else is editing this block.')); }
+  });
+  ed.doc.addEventListener('focusout', (e) => { if (!ed.doc.contains(e.relatedTarget)) setTimeout(() => { if (!ed.doc.contains(document.activeElement)) release(); }, 400); });
+  const hb = setInterval(async () => { if (lockedEl && known.has(lockedEl.dataset.id)) { const r = await rpc('lock_block', { p_id: lockedEl.dataset.id, p_token: TOKEN }); if (r.data === false) lockedEl = null; } }, 15000);
+  const sweep = setInterval(() => { locks.forEach((l, id) => { if (l.until <= Date.now()) { locks.delete(id); ed.setLock(id, null); } }); pres(); }, 4000);
+
+  return {
+    flush,
+    async stop() { stopped = true; clearInterval(hb); clearInterval(sweep); await flush(); await release(); sb.removeChannel(ch); },
   };
 }

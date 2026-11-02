@@ -64,6 +64,8 @@ const EN = {
   'Sao chép mẫu': 'Copy template', 'Đã sao chép mẫu': 'Template copied', 'Cần nhập việc từ file? ': 'Want to import tasks from a file? ', 'Tải mẫu CSV': 'Download the CSV template',
   'Tạo việc từ mục Việc giao': 'Create tasks from "Tasks assigned"',
   'Không thấy bảng trong mục "Việc giao". Giữ nguyên bảng như mẫu (Ai | Việc | Hạn | Sự kiện).': 'No table found under "Tasks assigned". Keep the table as in the template (Who | Task | Deadline | Event).',
+  'Sửa': 'Edit', 'Xong': 'Done', 'Đóng': 'Close', 'Sửa log họp': 'Edit meeting log',
+  'Thay đổi tự lưu theo từng khối. Người khác cũng mở được log này; khối ai đang gõ sẽ chỉ đọc với người còn lại.': 'Changes are saved block by block. Others can open this log too; a block someone is typing in is read-only for everyone else.',
   'Admin': 'Admin', 'Sự kiện đã hoàn thành!': 'Event completed!', 'Cảm ơn cả đội. Log sẽ được lưu vào Drive của Niffler.': "Thank you, team. The log will be saved to Niffler's Drive.", 'Tuyệt vời': 'Awesome',
 };
 for (const k of Object.keys(EN)) if (k !== k.trim()) EN[k.trim()] = EN[k].trim(); // khoá có khoảng trắng đầu/cuối vẫn khớp (tr() cắt khoảng trắng)
