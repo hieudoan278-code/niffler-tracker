@@ -2,7 +2,8 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.CONFIG;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $app = document.getElementById('app');
-const STATUS = { todo: 'Nhận', doing: 'Đang làm', done: 'Hoàn thành' };
+const STATUS = { get todo() { return tr('Nhận'); }, get doing() { return tr('Đang làm'); }, get done() { return tr('Hoàn thành'); } };
+const roleLabel = (r) => (r === 'admin' ? 'Admin' : LANG === 'en' ? 'Member' : 'Thành viên');
 const ORDER = ['todo', 'doing', 'done'];
 const S = { me: null, profiles: [], tasks: [], meetings: [], events: [], projects: [], view: 'board', mine: false, proj: '', openTask: null };
 const SUPER = 'niffler.hugo@gmail.com'; // chỉ tài khoản này đổi được vai trò (DB cũng chặn bằng trigger profiles_role_guard)
@@ -23,15 +24,16 @@ async function ensureProject(name) {
 // replaceChildren gốc in ra "false" và "[object ...]": làm nó bỏ qua false/null và mở mảng, giống h().
 const _rc = Element.prototype.replaceChildren;
 Element.prototype.replaceChildren = function (...k) { _rc.apply(this, k.flat(Infinity).filter((c) => c != null && c !== false)); };
+const TR_ATTR = new Set(['placeholder', 'aria-label', 'title', 'alt']);
 function h(tag, props = {}, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
     if (k === 'class') e.className = v;
     else if (k === 'html') e.innerHTML = v; // chỉ nhận chuỗi đã qua DOMPurify (md())
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
-    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : TR_ATTR.has(k) ? tr(v) : v);
   }
-  for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c));
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(typeof c === 'string' ? tr(c) : c));
   return e;
 }
 const svg = (d) => { const e = document.createElement('span'); e.innerHTML = `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`; return e.firstChild; };
@@ -41,8 +43,8 @@ const ICON = {
 };
 const $ = (s, r = document) => r.querySelector(s);
 const pmap = () => Object.fromEntries(S.profiles.map((p) => [p.id, p]));
-const fmt = (d) => new Date(d).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-const fmtDay = (d) => new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+const fmt = (d) => new Date(d).toLocaleString(LOCALE(), { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const fmtDay = (d) => new Date(d).toLocaleDateString(LOCALE(), { day: '2-digit', month: '2-digit' });
 const md = (t) => DOMPurify.sanitize(marked.parse(t || ''));
 const safeName = (n) => n.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^\w.\-]+/g, '_');
 const initials = (p) => (p.name || p.email).trim().split(/\s+/).slice(-1)[0][0].toUpperCase();
@@ -56,7 +58,7 @@ function when(t) {
   return ms < 0 ? { txt: `Trễ ${span}`, cls: 'late' } : { txt: `Còn ${span}`, cls: ms < 864e5 ? 'soon' : '' };
 }
 let toastEl;
-function toast(msg) { toastEl?.remove(); toastEl = h('div', { class: 'toast', role: 'status' }, msg); document.body.append(toastEl); setTimeout(() => toastEl?.remove(), 4000); }
+function toast(msg) { toastEl?.remove(); toastEl = h('div', { class: 'toast', role: 'status' }, tr(msg)); document.body.append(toastEl); setTimeout(() => toastEl?.remove(), 4000); }
 function modal(content, locked) {
   const scrim = h('div', { class: 'scrim' }), box = h('div', { class: 'dialog', role: 'dialog', 'aria-modal': 'true' }, content);
   const close = () => { scrim.remove(); box.remove(); document.removeEventListener('keydown', esc); };
@@ -79,13 +81,16 @@ async function upload(path, file) {
 }
 
 /* ---------- đăng nhập / khởi động ---------- */
+const STK = (n, cls = 'sticker') => h('img', { class: cls, src: `assets/stickers/${n}.png`, alt: '' });
+// Nút đổi ngôn ngữ Việt/Anh; sau khi đổi vẽ lại khung (đã đăng nhập) hoặc màn hình `again` (chưa đăng nhập).
+const langBtn = (again) => h('button', { class: 'linkbtn', 'aria-label': 'Language', onclick: () => { setLang(LANG === 'en' ? 'vi' : 'en'); S.me ? renderShell() : again(); } }, LANG === 'en' ? 'Tiếng Việt' : 'English');
 function renderLogin(msg) {
   $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'login-box' },
-    h('img', { src: 'assets/logo.png', alt: 'Logo Hugo English Club — Niffler' }),
+    STK(1, 'sticker big'),
     h('h1', {}, 'Niffler Tracker'),
     h('p', { class: 'muted' }, 'Theo dõi tiến độ việc của cả đội. Đăng nhập bằng email Google đã được admin thêm.'),
     msg && h('p', { class: 'err' }, msg),
-    h('button', { class: 'btn primary', onclick: () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }) }, 'Đăng nhập bằng Google'))));
+    h('button', { class: 'btn primary', onclick: () => sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname } }) }, 'Đăng nhập bằng Google'), langBtn(renderLogin))));
 }
 async function boot() {
   if (SUPABASE_URL.includes('YOUR-PROJECT')) return renderLogin('Chưa cấu hình: điền SUPABASE_URL và SUPABASE_ANON_KEY trong config.js (xem docs/cai-dat.md).');
@@ -93,7 +98,7 @@ async function boot() {
   if (!session) return renderLogin();
   const { data: me, error } = await sb.rpc('claim_profile');
   if (error || !me?.id) {
-    $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'login-box' }, h('img', { src: 'assets/logo.png', alt: '' }),
+    $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'login-box' }, STK(10, 'sticker big'),
       h('h1', {}, 'Chưa có trong danh sách'), h('p', { class: 'muted' }, `Email ${session.user.email} chưa được admin thêm vào CLB. Nhờ admin thêm email này rồi đăng nhập lại.`),
       h('button', { class: 'btn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))));
     return;
@@ -128,7 +133,7 @@ function renderShell() {
       h('div', { class: 'brand' }, h('img', { src: 'assets/logo.png', alt: '' }), h('span', {}, 'Niffler')),
       h('nav', { class: 'tabs', 'aria-label': 'Chức năng' }, tabs.map(([k, l]) => h('button', { class: 'tab', 'data-tab': k, onclick: () => { S.view = k; renderShell(); } }, l))),
       h('div', { class: 'who' }, h('span', {}, S.me.name), h('button', { class: 'btn rename', onclick: () => nameDialog(false) }, svg(ICON.pencil), ' Đổi tên'), isAdmin() && h('span', { class: 'role' }, 'Admin'),
-        h('button', { class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))),
+        langBtn(), h('button', { class: 'linkbtn', onclick: async () => { await sb.auth.signOut(); location.reload(); } }, 'Đăng xuất'))),
     isAdmin() && h('div', { class: 'usage', id: 'usage' }),
     h('main', { id: 'view' }));
   isAdmin() && showUsage();
@@ -159,7 +164,7 @@ function card(t) {
   const w = when(t), can = canMove(t);
   const idx = ORDER.indexOf(t.status);
   const mv = (dir) => h('button', { class: 'btn', 'aria-label': `Chuyển "${t.title}" sang ${STATUS[ORDER[idx + dir]]}`, onclick: (e) => { e.stopPropagation(); moveTask(t, ORDER[idx + dir]); } }, svg(dir < 0 ? ICON.left : ICON.right), ' ', STATUS[ORDER[idx + dir]]);
-  const el = h('div', { class: `task status-${t.status}${w.cls === 'late' ? ' late' : ''}`, draggable: can ? 'true' : false, tabindex: '0', role: 'button', 'aria-label': `${t.title}. ${w.txt}` },
+  const el = h('div', { class: `task status-${t.status}${w.cls === 'late' ? ' late' : ''}`, draggable: can ? 'true' : false, tabindex: '0', role: 'button', 'aria-label': `${t.title}. ${tr(w.txt)}` },
     projMap()[t.project_id] && h('div', { class: 'evtag' }, projMap()[t.project_id].name),
     h('div', { class: 'title' }, t.title),
     h('div', { class: 'meta' }, h('span', {}, 'Hạn ' + fmtDay(t.deadline)), h('span', { class: 'chip ' + w.cls }, w.txt)),
@@ -260,7 +265,7 @@ function nameDialog(first, target) {
     const { error } = target && target.id !== S.me.id ? await sb.from('profiles').update({ name: n.slice(0, 60) }).eq('id', target.id) : await sb.rpc('set_my_name', { n });
     if (error) { err.textContent = error.message; return; }
     m.close(); await loadAll(); renderShell(); toast('Đã lưu tên');
-  } }, h('h2', {}, first ? 'Chào mừng đến Niffler Tracker' : target ? `Đổi tên cho ${target.email}` : 'Đổi tên hiển thị'),
+  } }, first && STK(6), h('h2', {}, first ? 'Chào mừng đến Niffler Tracker' : target ? `Đổi tên cho ${target.email}` : 'Đổi tên hiển thị'),
     first && h('p', { class: 'muted' }, 'Đây là lần đầu bạn đăng nhập. Hãy đặt tên để mọi người nhận ra bạn.'),
     h('label', { class: 'field' }, target ? 'Tên hiển thị' : 'Tên của bạn', inp), err,
     h('div', { class: 'actions' }, !first && h('button', { class: 'btn', type: 'button', onclick: m.close }, 'Huỷ'), h('button', { class: 'btn primary', type: 'submit' }, 'Lưu'))));
@@ -272,9 +277,9 @@ function proofDialog(t) {
   const m = modal(null); let file = null;
   const info = h('p', { class: 'muted' }, 'Chưa chọn file.'), err = h('p', { class: 'err' });
   const pick = h('input', { type: 'file', hidden: true, onchange: () => set(pick.files[0]) });
-  const set = (f) => { file = f; info.textContent = f ? `Đã chọn: ${f.name}` : 'Chưa chọn file.'; go.disabled = !f; };
+  const set = (f) => { file = f; info.textContent = tr(f ? `Đã chọn: ${f.name}` : 'Chưa chọn file.'); go.disabled = !f; };
   const go = h('button', { class: 'btn primary', disabled: true, onclick: async () => {
-    go.disabled = true; err.textContent = 'Đang tải lên…';
+    go.disabled = true; err.textContent = tr('Đang tải lên…');
     try {
       const path = await upload(`proof/${t.id}/${Date.now()}-${safeName(file.name)}`, file);
       const { error } = await sb.from('tasks').update({ proof_path: path, status: 'done' }).eq('id', t.id);
@@ -286,7 +291,7 @@ function proofDialog(t) {
   zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('over'); }; zone.ondragleave = () => zone.classList.remove('over');
   zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove('over'); set(e.dataTransfer.files[0]); };
   zone.onkeydown = (e) => e.key === 'Enter' && pick.click();
-  m.box.replaceChildren(h('h2', {}, `Hoàn thành "${t.title}"`), h('p', {}, 'Cần có file minh chứng trước khi chuyển sang Hoàn thành.'), zone, pick, info, err,
+  m.box.replaceChildren(STK(13), h('h2', {}, `Hoàn thành "${t.title}"`), h('p', {}, 'Cần có file minh chứng trước khi chuyển sang Hoàn thành.'), zone, pick, info, err,
     h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: m.close }, 'Huỷ, giữ nguyên cột cũ'), go));
 }
 
@@ -368,7 +373,7 @@ function openDrawer(id) {
   closeDrawer(); const t = S.tasks.find((x) => x.id === id); if (!t) return;
   S.openTask = id; const P = pmap()[t.assignee], w = when(t);
   const del = h('button', { class: 'btn', onclick: async () => {
-    if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = 'Bấm lần nữa để xoá hẳn'; return; }
+    if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = tr('Bấm lần nữa để xoá hẳn'); return; }
     const { error } = await sb.from('tasks').delete().eq('id', t.id); if (error) return toast(error.message);
     closeDrawer(); await loadAll(); renderView();
   } }, 'Xoá việc');
@@ -431,7 +436,7 @@ function renderTimeline() {
   v.replaceChildren(head('Timeline tổng', evForm || ''),
     h('div', { class: 'tl' }, h('div', { class: 'tl-grid', style: `min-width:${width + 150}px` },
       h('div', { class: 'tl-head' }, h('div', { class: 'name', style: 'padding:6px 12px;font-weight:700' }, 'Người / sự kiện'), h('div', { class: 'tl-ticks', style: `width:${width}px` }, ticks)),
-      h('div', { class: 'tl-row', style: 'min-height:54px' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today lab', style: `left:${todayX}px` }),
+      h('div', { class: 'tl-row', style: 'min-height:54px' }, h('div', { class: 'name' }, 'Sự kiện'), track('', h('div', { class: 'today lab', 'data-label': tr('Hôm nay'), style: `left:${todayX}px` }),
         marks.map((m) => h('div', { class: 'marker', style: `left:${x(m.d)}px`, title: `${fmtDay(m.d)} · ${m.t}` })),
         marks.map((m) => h('span', { style: `position:absolute;left:${x(m.d) + 14}px;top:28px;font-size:11px;white-space:nowrap` }, m.t)))),
       rows.map(({ p, ts }) => h('div', { class: 'tl-row', style: `min-height:${ts.length * 28 + 12}px` }, h('div', { class: 'name' }, p.name || p.email),
@@ -448,8 +453,8 @@ function renderMeetings() {
   const list = h('div', {});
   const draw = () => {
     const k = q.value.trim().toLowerCase(), ms = S.meetings.filter((m) => !k || (m.title + m.body_md).toLowerCase().includes(k));
-    list.replaceChildren(...(ms.length ? ms.map((m) => h('article', { class: 'meeting' }, h('header', {}, h('h2', {}, m.title), h('span', { class: 'muted' }, new Date(m.held_on).toLocaleDateString('vi-VN')),
-      isAdmin() && h('button', { class: 'btn', style: 'margin-left:auto', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để xoá'; return; } await sb.from('meetings').delete().eq('id', m.id); await loadAll(); draw(); } }, 'Xoá')),
+    list.replaceChildren(...(ms.length ? ms.map((m) => h('article', { class: 'meeting' }, h('header', {}, h('h2', {}, m.title), h('span', { class: 'muted' }, new Date(m.held_on).toLocaleDateString(LOCALE())),
+      isAdmin() && h('button', { class: 'btn', style: 'margin-left:auto', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr('Bấm lần nữa để xoá'); return; } await sb.from('meetings').delete().eq('id', m.id); await loadAll(); draw(); } }, 'Xoá')),
       h('div', { class: 'prose', html: md(m.body_md) }))) : [h('p', { class: 'muted' }, 'Chưa có log họp nào.')]));
   };
   q.oninput = draw;
@@ -471,7 +476,7 @@ function meetingForm(redraw) {
 /* ---------- hướng dẫn, mẫu ---------- */
 async function renderGuide() {
   const v = $('#view'), docs = [['huong-dan-thanh-vien', 'Dành cho thành viên'], ...(isAdmin() ? [['huong-dan-admin', 'Dành cho admin']] : [])];
-  const out = h('article', { class: 'prose' }), pick = async (f) => { out.innerHTML = md(await (await fetch(`docs/${f}.md`)).text()); };
+  const out = h('article', { class: 'prose' }), pick = async (f) => { out.innerHTML = md(await (await fetch(`docs/${f}${LANG === 'en' ? '.en' : ''}.md`)).text()); };
   v.replaceChildren(head('Hướng dẫn', docs.map(([f, l]) => h('button', { class: 'btn', onclick: () => pick(f) }, l))), out); pick(docs[isAdmin() ? 1 : 0][0]);
 }
 function renderTemplates() {
@@ -480,6 +485,10 @@ function renderTemplates() {
 }
 
 /* ---------- sự kiện (admin): gom việc, hoàn thành sự kiện -> Apps Script xuất log vào Drive ---------- */
+function celebrate() {
+  const m = modal(null);
+  m.box.replaceChildren(STK(4, 'sticker big'), h('h2', {}, 'Sự kiện đã hoàn thành!'), h('p', { class: 'muted' }, 'Cảm ơn cả đội. Log sẽ được lưu vào Drive của Niffler.'), h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: m.close }, 'Tuyệt vời')));
+}
 function renderProjects() {
   const name = h('input', { required: true, maxlength: '100', placeholder: 'Ví dụ: Chung kết Hugo Cup' });
   const stat = (p) => { const ts = S.tasks.filter((t) => t.project_id === p.id); return { n: ts.length, done: ts.filter((t) => t.status === 'done').length }; };
@@ -489,12 +498,12 @@ function renderProjects() {
       ? (p.drive_url ? h('a', { href: p.drive_url, target: '_blank', rel: 'noopener' }, 'Mở log trong Drive') : h('span', { class: 'muted' }, 'Đang tạo log trong Drive (tối đa ~1 giờ)…'))
       : h('button', { class: 'btn', onclick: async (e) => {
         if (done < n) return toast(`Còn ${n - done} việc chưa Hoàn thành. Hoàn thành hết rồi mới đóng sự kiện được.`);
-        if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để hoàn thành sự kiện'; return; }
+        if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr('Bấm lần nữa để hoàn thành sự kiện'); return; }
         const { error } = await sb.from('projects').update({ closed_at: new Date().toISOString() }).eq('id', p.id);
-        if (error) return toast(error.message); await loadAll(); renderProjects(); toast('Đã hoàn thành sự kiện. Log sẽ được lưu vào Drive của Niffler.');
+        if (error) return toast(error.message); await loadAll(); renderProjects(); celebrate();
       } }, 'Hoàn thành sự kiện');
     const del = h('button', { class: 'btn', style: 'margin-left:8px', onclick: async (e) => {
-      if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = `Bấm lần nữa để xoá sự kiện${n ? ` và ${n} việc` : ''}`; return; }
+      if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr(`Bấm lần nữa để xoá sự kiện${n ? ` và ${n} việc` : ''}`); return; }
       const r1 = await sb.from('tasks').delete().eq('project_id', p.id); if (r1.error) return toast(r1.error.message);
       const r2 = await sb.from('projects').delete().eq('id', p.id); if (r2.error) return toast(r2.error.message);
       await loadAll(); renderProjects(); toast('Đã xoá sự kiện' + (p.drive_url ? '. Log trong Drive vẫn được giữ.' : ''));
@@ -506,22 +515,22 @@ function renderProjects() {
     h('form', { class: 'meeting', onsubmit: async (e) => { e.preventDefault(); try { await ensureProject(name.value); } catch (x) { return toast(x.message); } name.value = ''; await loadAll(); renderProjects(); } },
       h('h2', {}, 'Thêm sự kiện'), h('label', { class: 'field' }, 'Tên sự kiện', name), h('button', { class: 'btn primary', type: 'submit' }, 'Thêm')),
     rows.length ? h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Sự kiện', 'Tiến độ', 'Trạng thái', ''].map((x) => h('th', {}, x)))), h('tbody', {}, rows.map(row))))
-      : h('p', { class: 'muted' }, 'Chưa có sự kiện. Thêm ở trên, hoặc gõ tên sự kiện khi giao việc / thêm cột event vào file CSV.'));
+      : h('div', {}, STK(15), h('p', { class: 'muted' }, 'Chưa có sự kiện. Thêm ở trên, hoặc gõ tên sự kiện khi giao việc / thêm cột event vào file CSV.')));
 }
 
 /* ---------- thành viên (admin) ---------- */
 function renderMembers() {
-  const email = h('input', { type: 'email', required: true, placeholder: 'ten@gmail.com' }), name = h('input', { placeholder: 'Để trống: người đó tự đặt tên' }), role = h('select', {}, h('option', { value: 'member' }, 'Thành viên'), isSuper() && h('option', { value: 'admin' }, 'Admin'));
-  const roleCell = (p) => !isSuper() || p.email.toLowerCase() === SUPER ? (p.role === 'admin' ? 'Admin' : 'Thành viên')
+  const email = h('input', { type: 'email', required: true, placeholder: 'ten@gmail.com' }), name = h('input', { placeholder: 'Để trống: người đó tự đặt tên' }), role = h('select', {}, h('option', { value: 'member' }, roleLabel('member')), isSuper() && h('option', { value: 'admin' }, 'Admin'));
+  const roleCell = (p) => !isSuper() || p.email.toLowerCase() === SUPER ? roleLabel(p.role)
     : h('select', { 'aria-label': 'Vai trò của ' + p.name, onchange: async (e) => { const { error } = await sb.from('profiles').update({ role: e.target.value }).eq('id', p.id); toast(error ? error.message : 'Đã đổi vai trò'); await loadAll(); renderMembers(); } },
-      h('option', { value: 'member', selected: p.role === 'member' }, 'Thành viên'), h('option', { value: 'admin', selected: p.role === 'admin' }, 'Admin'));
+      h('option', { value: 'member', selected: p.role === 'member' }, roleLabel('member')), h('option', { value: 'admin', selected: p.role === 'admin' }, 'Admin'));
   $('#view').replaceChildren(head('Thành viên'),
     h('form', { class: 'meeting', onsubmit: async (e) => { e.preventDefault(); const { error } = await sb.from('profiles').insert({ email: email.value.trim().toLowerCase(), name: name.value.trim(), role: role.value }); if (error) return toast(error.message); await loadAll(); renderMembers(); } },
       h('h2', {}, 'Thêm người vào CLB'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin-top:8px' }, h('label', { class: 'field' }, 'Email Google', email), h('label', { class: 'field' }, 'Họ tên (không bắt buộc)', name), h('label', { class: 'field' }, 'Vai trò', role)),
       h('button', { class: 'btn primary', type: 'submit' }, 'Thêm')),
     h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Họ tên', 'Email', 'Vai trò', 'Đã đăng nhập', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, S.profiles.map((p) => h('tr', {}, h('td', {}, p.named ? p.name : '(chưa đặt tên)'), h('td', {}, p.email), h('td', {}, roleCell(p)), h('td', {}, p.auth_id ? 'Rồi' : 'Chưa'),
-        h('td', {}, h('button', { class: 'btn', style: 'margin-right:6px', onclick: () => nameDialog(false, p) }, 'Đổi tên'), p.id !== S.me.id && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để xoá (xoá cả việc của họ)'; return; } const { error } = await sb.from('profiles').delete().eq('id', p.id); if (error) return toast(error.message); await loadAll(); renderMembers(); } }, 'Xoá'))))))));
+        h('td', {}, h('button', { class: 'btn', style: 'margin-right:6px', onclick: () => nameDialog(false, p) }, 'Đổi tên'), p.id !== S.me.id && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = tr('Bấm lần nữa để xoá (xoá cả việc của họ)'); return; } const { error } = await sb.from('profiles').delete().eq('id', p.id); if (error) return toast(error.message); await loadAll(); renderMembers(); } }, 'Xoá'))))))));
 }
 
 boot();

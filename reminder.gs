@@ -1,5 +1,6 @@
 /**
- * Niffler Tracker — gửi mail nhắc hạn / báo trễ hạn.
+ * Niffler Tracker — deadline reminder / overdue emails (English) + event log export to Drive.
+ * (Tiếng Việt: gửi mail nhắc hạn / báo trễ hạn, xuất log sự kiện vào Drive.)
  * Dán vào Apps Script khi đăng nhập bằng niffler.hugo@gmail.com (mail gửi từ chính tài khoản này, không cần mật khẩu).
  * Project Settings > Script properties: SUPABASE_URL, SERVICE_KEY (service_role, KHÔNG đưa lên GitHub), APP_URL.
  * Chạy `setup` một lần (cấp quyền gửi mail + tạo Doc trong Drive); sau đó trigger tự chạy `run` mỗi giờ.
@@ -21,10 +22,13 @@ function api_(path, method, body) {
   return t ? JSON.parse(t) : null;
 }
 const esc_ = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt_ = (d) => Utilities.formatDate(new Date(d), 'Asia/Ho_Chi_Minh', 'HH:mm dd/MM/yyyy');
-const shell_ = (inner) => '<div style="font-family:Arial,sans-serif;max-width:560px;border:1px solid #e6dcea;border-radius:10px;overflow:hidden">' +
-  '<div style="background:#6a0f7a;color:#fff;padding:12px 16px;font-weight:bold;letter-spacing:.05em">NIFFLER · HUGO ENGLISH CLUB<div style="font-weight:normal;font-style:italic;font-size:12px;letter-spacing:0;color:#f2c230">Friend Forever</div></div>' +
-  '<div style="padding:16px;color:#1f1a24;line-height:1.5">' + inner + (APP ? '<p><a href="' + esc_(APP) + '" style="color:#6a0f7a;font-weight:bold">Mở Niffler Tracker</a></p>' : '') + '</div></div>';
+const fmt_ = (d) => Utilities.formatDate(new Date(d), 'Asia/Ho_Chi_Minh', 'HH:mm dd/MM/yyyy') + ' (GMT+7)';
+// Sticker từ GitHub Pages (assets/stickers/N.png); Gmail tải ảnh qua proxy của Google.
+const sticker_ = (n) => APP ? '<p style="text-align:center;margin:8px 0"><img src="' + esc_(APP.replace(/\/?$/, '/')) + 'assets/stickers/' + n + '.png" width="150" alt="Niffler sticker"></p>' : '';
+const shell_ = (inner, stickerNo) => '<div style="font-family:Arial,sans-serif;max-width:560px;border:1px solid #e6dcea;border-radius:10px;overflow:hidden">' +
+  '<div style="background:#6a0f7a;color:#fff;padding:12px 16px;font-weight:bold;letter-spacing:.05em">NIFFLER · HUGO ENGLISH CLUB<div style="font-weight:normal;font-style:italic;font-size:12px;letter-spacing:0;color:#f2c230">Friends Forever</div></div>' +
+  '<div style="padding:16px;color:#1f1a24;line-height:1.5">' + inner + sticker_(stickerNo) + (APP ? '<p style="text-align:center"><a href="' + esc_(APP) + '" style="color:#6a0f7a;font-weight:bold">Open Niffler Tracker</a></p>' : '') + '</div>' +
+  '<div style="background:#faf5fb;color:#6a0f7a;text-align:center;padding:8px;font-size:12px;font-style:italic">Niffler · Friends Forever</div></div>';
 
 function run() {
   const now = new Date(), in24 = new Date(+now + 24 * 3600 * 1000);
@@ -34,8 +38,8 @@ function run() {
   const soon = api_('tasks?select=' + sel + '&status=neq.done&reminded=eq.false&deadline=gt.' + now.toISOString() + '&deadline=lte.' + in24.toISOString());
   soon.forEach((t) => {
     try {
-      MailApp.sendEmail({ to: t.profiles.email, name: SENDER, subject: 'Sắp đến hạn: ' + t.title,
-        htmlBody: shell_('<p>Chào ' + esc_(t.profiles.name) + ',</p><p>Việc <b>' + esc_(t.title) + '</b> sẽ đến hạn lúc <b>' + fmt_(t.deadline) + '</b>.</p><p>Nhớ nộp file minh chứng khi chuyển sang Hoàn thành nhé.</p>') });
+      MailApp.sendEmail({ to: t.profiles.email, name: SENDER, subject: 'Due soon: ' + t.title,
+        htmlBody: shell_('<p>Hi ' + esc_(t.profiles.name) + ',</p><p>Your task <b>' + esc_(t.title) + '</b> is due on <b>' + fmt_(t.deadline) + '</b>.</p><p>Please upload a proof file when you move it to <i>Done</i>. You can do it!</p>', 13) });
       api_('tasks?id=eq.' + t.id, 'patch', { reminded: true });
     } catch (e) { console.error('remind ' + t.id, e); }   // lỗi thì không đánh dấu, lần sau thử lại
   });
@@ -46,8 +50,8 @@ function run() {
     const admins = api_('profiles?select=email&role=eq.admin').map((a) => a.email);
     if (admins.length) {
       const rows = late.map((t) => '<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">' + esc_(t.profiles.name) + '</td><td style="padding:4px 8px;border-bottom:1px solid #eee">' + esc_(t.title) + '</td><td style="padding:4px 8px;border-bottom:1px solid #eee">' + fmt_(t.deadline) + '</td></tr>').join('');
-      MailApp.sendEmail({ to: admins.join(','), name: SENDER, subject: late.length + ' việc đã trễ hạn',
-        htmlBody: shell_('<p><b>' + late.length + ' việc</b> đã quá hạn mà chưa hoàn thành:</p><table style="border-collapse:collapse;font-size:14px"><tr><th align="left" style="padding:4px 8px">Người làm</th><th align="left" style="padding:4px 8px">Việc</th><th align="left" style="padding:4px 8px">Hạn</th></tr>' + rows + '</table>') });
+      MailApp.sendEmail({ to: admins.join(','), name: SENDER, subject: late.length + (late.length > 1 ? ' tasks are' : ' task is') + ' overdue',
+        htmlBody: shell_('<p><b>' + late.length + (late.length > 1 ? ' tasks have' : ' task has') + '</b> passed the deadline without being completed:</p><table style="border-collapse:collapse;font-size:14px"><tr><th align="left" style="padding:4px 8px">Assignee</th><th align="left" style="padding:4px 8px">Task</th><th align="left" style="padding:4px 8px">Deadline</th></tr>' + rows + '</table>', 9) });
       late.forEach((t) => { try { api_('tasks?id=eq.' + t.id, 'patch', { overdue_notified: true }); } catch (e) { console.error('late ' + t.id, e); } });
     }
   }
@@ -56,7 +60,7 @@ function run() {
 }
 
 // 3) Sự kiện đã "Hoàn thành" trên web (closed_at) mà chưa có drive_url: tạo Google Doc log trong Drive của tài khoản này.
-const LOG_FOLDER = 'Niffler - Log sự kiện';
+const LOG_FOLDER = 'Niffler - Event logs';
 function exportLogs_() {
   const done = api_('projects?select=*&closed_at=not.is.null&drive_url=is.null');
   done.forEach((p) => {
@@ -66,16 +70,16 @@ function exportLogs_() {
       const comments = tasks.length ? api_('comments?select=task_id,body,created_at,profiles(name)&task_id=in.(' + ids + ')&order=created_at') : [];
       const evs = tasks.length ? api_('task_events?select=task_id,detail,created_at&kind=eq.status&task_id=in.(' + ids + ')&order=created_at') : [];
       const doneAt = {}; evs.forEach((e) => { if (e.detail && e.detail.to === 'done') doneAt[e.task_id] = e.created_at; });
-      const doc = DocumentApp.create('Log sự kiện: ' + p.name + ' (' + Utilities.formatDate(new Date(p.closed_at), 'Asia/Ho_Chi_Minh', 'dd-MM-yyyy') + ')');
+      const doc = DocumentApp.create('Event log: ' + p.name + ' (' + Utilities.formatDate(new Date(p.closed_at), 'Asia/Ho_Chi_Minh', 'dd-MM-yyyy') + ')');
       const body = doc.getBody();
       body.appendParagraph(p.name).setHeading(DocumentApp.ParagraphHeading.TITLE);
-      body.appendParagraph('Hoàn thành lúc ' + fmt_(p.closed_at) + ' · ' + tasks.length + ' việc');
-      body.appendParagraph('Danh sách việc').setHeading(DocumentApp.ParagraphHeading.HEADING1);
-      const rows = [['Người làm', 'Việc', 'Hạn', 'Hoàn thành lúc', 'Minh chứng (đường dẫn trong Supabase Storage)']];
+      body.appendParagraph('Completed on ' + fmt_(p.closed_at) + ' · ' + tasks.length + (tasks.length === 1 ? ' task' : ' tasks'));
+      body.appendParagraph('Tasks').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      const rows = [['Assignee', 'Task', 'Deadline', 'Completed at', 'Proof file (path in Supabase Storage)']];
       tasks.forEach((t) => rows.push([t.profiles ? (t.profiles.name || t.profiles.email) : '?', t.title, fmt_(t.deadline), doneAt[t.id] ? fmt_(doneAt[t.id]) : '—', t.proof_path || '—']));
       body.appendTable(rows);
       if (comments.length) {
-        body.appendParagraph('Bình luận').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        body.appendParagraph('Comments').setHeading(DocumentApp.ParagraphHeading.HEADING1);
         const title = {}; tasks.forEach((t) => { title[t.id] = t.title; });
         comments.forEach((c) => body.appendListItem(fmt_(c.created_at) + ' · ' + (c.profiles ? c.profiles.name : '?') + ' · [' + title[c.task_id] + '] ' + c.body));
       }

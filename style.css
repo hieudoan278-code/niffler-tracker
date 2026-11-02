@@ -152,7 +152,7 @@ tr.bad td { background: var(--red-wash); }
 .tl-ticks { position: relative; height: 30px; }
 .tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #d6bde0; font-size: 12px; padding: 6px 4px; color: var(--purple-ink); font-weight: 600; }
 .today { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--magenta); z-index: 2; pointer-events: none; }
-.today.lab::after { content: "Hôm nay"; position: absolute; top: 2px; left: 6px; font-size: 11px; font-weight: 700; color: var(--magenta); white-space: nowrap; background: #fff; padding: 0 3px; border-radius: 3px; }
+.today.lab::after { content: attr(data-label); position: absolute; top: 2px; left: 6px; font-size: 11px; font-weight: 700; color: var(--magenta); white-space: nowrap; background: #fff; padding: 0 3px; border-radius: 3px; }
 .tick { white-space: nowrap; }
 .marker { position: absolute; top: 29px; width: 12px; height: 12px; background: var(--yellow); border: 2px solid var(--ink); transform: rotate(45deg); }
 
@@ -193,3 +193,8 @@ tr.bad td { background: var(--red-wash); }
 .ubar .track { height: 6px; border-radius: 3px; background: #e6dcea; margin-top: 3px; overflow: hidden; }
 .ubar i { display: block; height: 100%; background: #6a0f7a; }
 .ubar.warn i { background: #d33; }
+
+.sticker { display: block; width: 96px; height: auto; margin: 0 auto 6px; }
+.sticker.big { width: 168px; }
+.login-box .sticker { border-radius: 0; box-shadow: none; background: none; height: auto; }
+.linkbtn[aria-label="Language"] { font-weight: 700; }

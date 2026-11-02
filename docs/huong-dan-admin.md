@@ -36,7 +36,7 @@ Có hai cách, không bắt buộc kéo thả:
 ## 4b. Sự kiện và hoàn thành sự kiện
 Mỗi việc có thể thuộc một **sự kiện** (chọn hoặc gõ tên mới khi giao việc, hoặc cột `event` trong CSV). Thẻ hiện nhãn sự kiện, Bảng việc có ô lọc theo sự kiện, nên một người chạy nhiều sự kiện vẫn phân biệt được việc nào của sự kiện nào. Admin đổi sự kiện của việc trong ngăn chi tiết.
 
-Tab **Sự kiện** → **Hoàn thành sự kiện** (bấm 2 lần; phải xong hết việc của sự kiện). Việc của sự kiện đó ẩn khỏi bảng, dữ liệu vẫn giữ. Trong tối đa khoảng 1 giờ, hệ thống tạo một Google Doc log (danh sách việc, người làm, hạn, ngày xong, minh chứng, bình luận) trong thư mục Drive **"Niffler - Log sự kiện"** của `niffler.hugo@gmail.com`, và link hiện ở tab Sự kiện.
+Tab **Sự kiện** → **Hoàn thành sự kiện** (bấm 2 lần; phải xong hết việc của sự kiện). Việc của sự kiện đó ẩn khỏi bảng, dữ liệu vẫn giữ. Trong tối đa khoảng 1 giờ, hệ thống tạo một Google Doc log (danh sách việc, người làm, hạn, ngày xong, minh chứng, bình luận) trong thư mục Drive **"Niffler - Event logs"** của `niffler.hugo@gmail.com`, và link hiện ở tab Sự kiện.
 
 ## 5. Log họp
 Tab **Log họp** → ô **Thêm log họp**: chọn ngày, tiêu đề, dán nội dung (Markdown) hoặc thả file `.md/.txt`. Mẫu ở tab Tải mẫu. Mọi người đều đọc được.
