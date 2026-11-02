@@ -60,6 +60,10 @@ const EN = {
   'Giao nhiều việc cùng lúc': 'Assign several tasks at once', 'Mỗi dòng là một việc. Dòng để trống sẽ bị bỏ qua.': 'Each row is one task. Empty rows are ignored.', '— Chọn người —': '— Choose a person —', '+ Thêm dòng': '+ Add row', 'Xoá dòng': 'Delete row',
   'Mô tả': 'Description', 'Lỗi': 'Error', 'Dán từ Excel / Google Sheets': 'Paste from Excel / Google Sheets', 'Điền vào bảng': 'Fill the table', 'Giao tất cả': 'Assign all', 'Chưa chọn người nhận': 'No assignee chosen', 'Hạn chót không hợp lệ': 'Invalid deadline',
   'Chưa có dòng nào để giao.': 'No rows to assign.', 'Dán các dòng copy từ Excel/Google Sheets, mỗi dòng: người nhận (email hoặc tên) | tên việc | hạn | sự kiện | mô tả': 'Paste rows copied from Excel/Google Sheets, each row: assignee (email or name) | task | deadline | event | description',
+  'Mẫu này đã hiện sẵn trong ô "Thêm log họp". Bảng ở mục "Việc giao" có thể chuyển thành việc bằng nút "Tạo việc từ mục Việc giao".': 'This template is already pre-filled in the "Add meeting log" box. The table under "Tasks assigned" can be turned into tasks with the "Create tasks from Tasks assigned" button.',
+  'Sao chép mẫu': 'Copy template', 'Đã sao chép mẫu': 'Template copied', 'Cần nhập việc từ file? ': 'Want to import tasks from a file? ', 'Tải mẫu CSV': 'Download the CSV template',
+  'Tạo việc từ mục Việc giao': 'Create tasks from "Tasks assigned"',
+  'Không thấy bảng trong mục "Việc giao". Giữ nguyên bảng như mẫu (Ai | Việc | Hạn | Sự kiện).': 'No table found under "Tasks assigned". Keep the table as in the template (Who | Task | Deadline | Event).',
   'Admin': 'Admin', 'Sự kiện đã hoàn thành!': 'Event completed!', 'Cảm ơn cả đội. Log sẽ được lưu vào Drive của Niffler.': "Thank you, team. The log will be saved to Niffler's Drive.", 'Tuyệt vời': 'Awesome',
 };
 for (const k of Object.keys(EN)) if (k !== k.trim()) EN[k.trim()] = EN[k].trim(); // khoá có khoảng trắng đầu/cuối vẫn khớp (tr() cắt khoảng trắng)

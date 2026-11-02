@@ -299,7 +299,7 @@ function proofDialog(t) {
 function bulkZone() {
   const pick = h('input', { type: 'file', accept: '.csv,text/csv', hidden: true, onchange: () => pick.files[0] && bulkFile(pick.files[0]) });
   const z = h('div', { class: 'dropzone', 'data-drop': '' }, svg(ICON.up), h('span', { style: 'flex:1' }, h('strong', {}, 'Giao nhiều việc: '), 'điền bảng ngay trên web, hoặc thả 1 file CSV vào đây.'),
-    h('button', { class: 'btn primary', onclick: gridDialog }, 'Giao nhiều việc'), h('button', { class: 'btn', onclick: () => pick.click() }, 'Nhập từ CSV'), h('button', { class: 'btn', onclick: () => { S.view = 'templates'; renderShell(); } }, 'Tải mẫu'), pick);
+    h('button', { class: 'btn primary', onclick: () => gridDialog() }, 'Giao nhiều việc'), h('button', { class: 'btn', onclick: () => pick.click() }, 'Nhập từ CSV'), h('button', { class: 'btn', onclick: () => { S.view = 'templates'; renderShell(); } }, 'Tải mẫu'), pick);
   z.ondragover = (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); z.classList.add('over'); } };
   z.ondragleave = () => z.classList.remove('over');
   z.ondrop = (e) => { e.preventDefault(); z.classList.remove('over'); e.dataTransfer.files[0] && bulkFile(e.dataTransfer.files[0]); };
@@ -348,7 +348,7 @@ async function assignTasks(good) {
 }
 
 /* ---------- bảng nhập nhiều việc ngay trên web ---------- */
-function gridDialog() {
+function gridDialog(pre) {
   const m = modal(null); m.box.classList.add('wide');
   const dl0 = () => toLocalInput(new Date(Date.now() + 7 * 864e5).setHours(23, 59));
   const rows = [], tbody = h('tbody', {}), msg = h('p', { class: 'err' });
@@ -365,16 +365,16 @@ function gridDialog() {
     rows.push(r); tbody.append(r.tr);
   }
   const paste = h('textarea', { rows: '3', placeholder: 'Dán các dòng copy từ Excel/Google Sheets, mỗi dòng: người nhận (email hoặc tên) | tên việc | hạn | sự kiện | mô tả' });
-  const fill = () => {
+  // data: mảng dòng [người nhận (email/tên), việc, hạn, sự kiện, mô tả]
+  const load = (data) => {
     const byKey = {}; S.profiles.forEach((p) => { byKey[p.email.toLowerCase()] = p; byKey[p.name.toLowerCase()] = p; });
-    const data = parseCSV(paste.value); if (!data.length) return;
     rows.filter(isBlank).forEach((r) => { rows.splice(rows.indexOf(r), 1); r.tr.remove(); });
     data.forEach((r) => {
       const raw = (r[2] || '').trim(), d = raw ? parseDeadline(raw) : null;
       addRow({ who: byKey[(r[0] || '').trim().toLowerCase()]?.id, title: (r[1] || '').trim(), dl: raw ? (d ? toLocalInput(d) : '') : undefined, event: (r[3] || '').trim(), desc: (r[4] || '').trim() });
     });
-    paste.value = '';
   };
+  const fill = () => { const data = parseCSV(paste.value); if (!data.length) return; load(data); paste.value = ''; };
   const go = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
     msg.textContent = ''; const seen = new Set(S.tasks.map((t) => t.assignee + '|' + t.title.toLowerCase()));
     const used = rows.filter((r) => !isBlank(r)); if (!used.length) { msg.textContent = tr('Chưa có dòng nào để giao.'); return; }
@@ -390,7 +390,7 @@ function gridDialog() {
     try { await assignTasks(good); } catch (e) { go.disabled = false; return toast('Lỗi: ' + e.message); }
     m.close(); toast(`Đã giao ${good.length} việc.`); await loadAll(); renderView();
   } }, 'Giao tất cả');
-  for (let i = 0; i < 3; i++) addRow();
+  if (pre?.length) load(pre); else for (let i = 0; i < 3; i++) addRow();
   m.box.replaceChildren(h('h2', {}, 'Giao nhiều việc cùng lúc'), h('p', { class: 'muted' }, 'Mỗi dòng là một việc. Dòng để trống sẽ bị bỏ qua.'), list,
     h('div', { class: 'scroll' }, h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['Người nhận', 'Việc', 'Hạn chót', 'Sự kiện', 'Mô tả', 'Lỗi', ''].map((x) => h('th', {}, x)))), tbody)),
     h('div', { style: 'margin:8px 0' }, h('button', { class: 'btn', type: 'button', onclick: () => addRow() }, '+ Thêm dòng')),
@@ -518,16 +518,32 @@ function renderMeetings() {
   q.oninput = draw;
   v.replaceChildren(head('Log họp', q), isAdmin() && meetingForm(draw), list); draw();
 }
+const tplFile = () => `templates/mau-log-hop${LANG === 'en' ? '.en' : ''}.md`;
+const tplText = () => fetch(tplFile()).then((r) => r.text());
+// Lấy các dòng của bảng markdown ngay dưới tiêu đề "Việc giao" / "Tasks assigned" (bỏ dòng tiêu đề cột).
+function meetingTasks(mdText) {
+  const out = []; let on = false;
+  for (const ln of mdText.split(/\r?\n/)) {
+    if (/^#{1,6}\s/.test(ln)) { on = /^#{1,6}\s*(việc giao|tasks? assigned|action items)\b/i.test(ln); continue; }
+    if (!on || !ln.trim().startsWith('|')) continue;
+    const c = ln.trim().replace(/^\||\|$/g, '').split('|').map((x) => x.trim());
+    if (c.every((x) => /^:?-{2,}:?$/.test(x))) continue;
+    out.push(c);
+  }
+  return out.slice(1).filter((c) => c.some(Boolean));
+}
 function meetingForm(redraw) {
   const date = h('input', { type: 'date', required: true, value: new Date().toISOString().slice(0, 10) }), title = h('input', { required: true, placeholder: 'Họp tuần 12' }), body = h('textarea', { placeholder: 'Dán log họp (Markdown) hoặc thả file .md/.txt vào ô này' });
+  tplText().then((t) => { if (!body.value) body.value = t; });   // mẫu hiện sẵn trong ô nội dung
   body.ondragover = (e) => e.preventDefault();
   const read = async (f) => { if (!f) return; body.value = await f.text(); if (!title.value) title.value = f.name.replace(/\.[^.]+$/, ''); };
   body.ondrop = (e) => { e.preventDefault(); read(e.dataTransfer.files[0]); };
   const box = h('form', { class: 'meeting', 'data-drop': '', onsubmit: async (e) => {
     e.preventDefault(); const { error } = await sb.from('meetings').insert({ held_on: date.value, title: title.value.trim(), body_md: body.value, author: S.me.id });
-    if (error) return toast(error.message); title.value = ''; body.value = ''; await loadAll(); redraw(); toast('Đã lưu log họp');
+    if (error) return toast(error.message); title.value = ''; body.value = ''; tplText().then((t) => { if (!body.value) body.value = t; }); await loadAll(); redraw(); toast('Đã lưu log họp');
   } }, h('h2', {}, 'Thêm log họp'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, h('label', { class: 'field' }, 'Ngày họp', date), h('label', { class: 'field', style: 'flex:1;min-width:200px' }, 'Tiêu đề', title)),
-    h('label', { class: 'field' }, 'Nội dung', body), h('button', { class: 'btn primary', type: 'submit' }, 'Lưu log họp'));
+    h('label', { class: 'field' }, 'Nội dung', body), h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, h('button', { class: 'btn primary', type: 'submit' }, 'Lưu log họp'),
+      h('button', { class: 'btn', type: 'button', onclick: () => { const r = meetingTasks(body.value); if (!r.length) return toast('Không thấy bảng trong mục "Việc giao". Giữ nguyên bảng như mẫu (Ai | Việc | Hạn | Sự kiện).'); gridDialog(r); } }, 'Tạo việc từ mục Việc giao')));
   return box;
 }
 
@@ -537,9 +553,15 @@ async function renderGuide() {
   const out = h('article', { class: 'prose' }), pick = async (f) => { out.innerHTML = md(await (await fetch(`docs/${f}${LANG === 'en' ? '.en' : ''}.md`)).text()); };
   v.replaceChildren(head('Hướng dẫn', docs.map(([f, l]) => h('button', { class: 'btn', onclick: () => pick(f) }, l))), out); pick(docs[isAdmin() ? 1 : 0][0]);
 }
-function renderTemplates() {
-  const T = [['templates/mau-phan-cong.csv', 'Mẫu phân công (CSV)', 'File tổng để admin thả vào Bảng việc. Mở bằng Excel hoặc Google Sheets, giữ nguyên dòng đầu.'], ['templates/mau-log-hop.md', 'Mẫu log họp (Markdown)', 'Dán hoặc thả vào ô Thêm log họp. Có sẵn các mục: quyết định, việc giao, việc tồn.']];
-  $('#view').replaceChildren(head('Tải mẫu'), h('div', { class: 'tplgrid' }, T.map(([href, t, d]) => h('div', { class: 'tpl' }, h('h2', { style: 'font-size:18px' }, t), h('p', { class: 'muted' }, d), h('a', { class: 'btn primary', href, download: '', style: 'text-decoration:none;text-align:center' }, 'Tải về')))));
+async function renderTemplates() {
+  const view = $('#view'), text = await tplText(), out = h('article', { class: 'prose', html: md(text) });
+  if (S.view !== 'templates') return;
+  view.replaceChildren(head('Tải mẫu'), h('div', { class: 'tpl' }, h('h2', { style: 'font-size:18px' }, 'Mẫu log họp (Markdown)'),
+    h('p', { class: 'muted' }, 'Mẫu này đã hiện sẵn trong ô "Thêm log họp". Bảng ở mục "Việc giao" có thể chuyển thành việc bằng nút "Tạo việc từ mục Việc giao".'),
+    h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+      h('button', { class: 'btn primary', onclick: () => navigator.clipboard.writeText(text).then(() => toast('Đã sao chép mẫu')) }, 'Sao chép mẫu'),
+      h('a', { class: 'btn', href: tplFile(), download: '', style: 'text-decoration:none' }, 'Tải về')), out),
+    h('p', { class: 'muted', style: 'margin-top:12px' }, 'Cần nhập việc từ file? ', h('a', { href: 'templates/mau-phan-cong.csv', download: '' }, 'Tải mẫu CSV')));
 }
 
 /* ---------- sự kiện (admin): gom việc, hoàn thành sự kiện -> Apps Script xuất log vào Drive ---------- */

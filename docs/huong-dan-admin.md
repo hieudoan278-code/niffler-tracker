@@ -30,7 +30,9 @@ Mỗi việc có thể thuộc một **sự kiện** (chọn hoặc gõ tên m�
 Tab **Sự kiện** → **Hoàn thành sự kiện** (bấm 2 lần; phải xong hết việc của sự kiện). Việc của sự kiện đó ẩn khỏi bảng, dữ liệu vẫn giữ. Trong tối đa khoảng 1 giờ, hệ thống tạo một Google Doc log (danh sách việc, người làm, hạn, ngày xong, minh chứng, bình luận) trong thư mục Drive **"Niffler - Event logs"** của `niffler.hugo@gmail.com`, và link hiện ở tab Sự kiện.
 
 ## 5. Log họp
-Tab **Log họp** → ô **Thêm log họp**: chọn ngày, tiêu đề, dán nội dung (Markdown) hoặc thả file `.md/.txt`. Mẫu ở tab Tải mẫu. Mọi người đều đọc được.
+Tab **Log họp** → ô **Thêm log họp**: chọn ngày, tiêu đề, và sửa nội dung. **Mẫu đã hiện sẵn trong ô nội dung** (xoá hoặc sửa theo buổi họp), hoặc thả file `.md/.txt` vào ô. Mọi người đều đọc được.
+
+**Tự đẩy việc từ log:** giữ nguyên bảng ở mục **Việc giao** (cột *Ai | Việc | Hạn | Sự kiện*; Ai là tên hoặc email, hạn dạng `10/12/2026`), rồi bấm **Tạo việc từ mục Việc giao**. Bảng nhập nhiều việc mở ra với các dòng đã điền sẵn để bạn kiểm tra, sửa, rồi bấm **Giao tất cả**. Việc không tự tạo khi chỉ lưu log, bạn luôn xác nhận trước.
 
 ## 6. Timeline
 Tab **Timeline**: thêm **mốc sự kiện** (hạn nộp hồ sơ, ngày diễn ra sự kiện…) bằng form phía trên. Buổi họp tự hiện thành hình thoi vàng.
