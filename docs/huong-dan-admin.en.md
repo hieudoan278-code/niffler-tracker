@@ -5,23 +5,14 @@
 
 **Roles:** only the account `niffler.hugo@gmail.com` can change roles (Admin / Member) and add new admins. Other admins can only add members.
 
-## 2. Bulk-assigning tasks with one CSV file
-1. **Templates** tab → download `mau-phan-cong.csv`.
-2. Open it in Excel or Google Sheets, one task per row, **keep the first row**:
+## 2. Assigning several tasks at once
+On the **Task board**, click **Assign several tasks** to open the entry table: each row is one task with the assignee (pick from the list), task name, deadline, event (pick or type a new one) and description. **+ Add row** adds a row, **×** deletes it, empty rows are ignored.
 
-| Column | Required | Example |
-|---|---|---|
-| `email` | Yes | `lan@gmail.com` (must be in the Members tab) |
-| `title` | Yes | `Design the poster` (max 200 characters) |
-| `deadline` | Yes | `2026-12-05 23:59` or `05/12/2026` (no time means 23:59) |
-| `description` | No | A short description |
-| `event` | No | `Hugo Cup` (event name, created automatically if new) |
+**Paste from Excel / Google Sheets:** open *Paste from Excel / Google Sheets*, paste the copied cells (columns in this order: assignee (email or name), task, deadline, event, description) and click **Fill the table**. Write the deadline as `2026-12-05 23:59` or `05/12/2026` (no time means 23:59). Rows with problems (no assignee, deadline in the past, duplicate…) turn red with the reason; fix them and click **Assign all**.
 
-3. Save as **CSV** (Excel: *Save As → CSV UTF-8*; Google Sheets: *Download → CSV*). Use UTF-8 so accents are not garbled. Both `,` and `;` separators work.
-4. On the **Task board**, drop the file into the **Bulk assign** box (or click Choose CSV file).
-5. Read the **Preview** table. Red rows have errors and are skipped: unknown email, wrong date, deadline in the past, duplicate task. Click **Assign N valid tasks**.
+**Import from a CSV file (secondary):** click **Import CSV** or drop the file onto the box. The template is in the **Templates** tab (`mau-phan-cong.csv`, columns `email,title,deadline,description,event`; save as *CSV UTF-8*). A preview is shown and rows with errors are skipped.
 
-Each task lands in the **To do** column of the person with that email.
+Each task lands in the **To do** column of its assignee.
 
 ## 3. Assigning a single task
 Two ways, drag-and-drop is optional:

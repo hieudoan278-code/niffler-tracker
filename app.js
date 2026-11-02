@@ -298,8 +298,8 @@ function proofDialog(t) {
 /* ---------- giao hàng loạt từ CSV ---------- */
 function bulkZone() {
   const pick = h('input', { type: 'file', accept: '.csv,text/csv', hidden: true, onchange: () => pick.files[0] && bulkFile(pick.files[0]) });
-  const z = h('div', { class: 'dropzone', 'data-drop': '' }, svg(ICON.up), h('span', { style: 'flex:1' }, h('strong', {}, 'Giao việc hàng loạt: '), 'thả 1 file CSV tổng vào đây, hệ thống tự chia về từng người.'),
-    h('button', { class: 'btn', onclick: () => pick.click() }, 'Chọn file CSV'), h('button', { class: 'btn', onclick: () => { S.view = 'templates'; renderShell(); } }, 'Tải mẫu'), pick);
+  const z = h('div', { class: 'dropzone', 'data-drop': '' }, svg(ICON.up), h('span', { style: 'flex:1' }, h('strong', {}, 'Giao nhiều việc: '), 'điền bảng ngay trên web, hoặc thả 1 file CSV vào đây.'),
+    h('button', { class: 'btn primary', onclick: gridDialog }, 'Giao nhiều việc'), h('button', { class: 'btn', onclick: () => pick.click() }, 'Nhập từ CSV'), h('button', { class: 'btn', onclick: () => { S.view = 'templates'; renderShell(); } }, 'Tải mẫu'), pick);
   z.ondragover = (e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); z.classList.add('over'); } };
   z.ondragleave = () => z.classList.remove('over');
   z.ondrop = (e) => { e.preventDefault(); z.classList.remove('over'); e.dataTransfer.files[0] && bulkFile(e.dataTransfer.files[0]); };
@@ -307,7 +307,7 @@ function bulkZone() {
 }
 function parseCSV(text) {
   text = text.replace(/^﻿/, '');
-  const first = text.split(/\r?\n/)[0], delim = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : ',';
+  const first = text.split(/\r?\n/)[0], cnt = (c) => first.split(c).length - 1, delim = cnt('\t') > 0 ? '\t' : cnt(';') > cnt(',') ? ';' : ',';
   const rows = []; let row = [], cell = '', q = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
@@ -328,6 +328,76 @@ function parseDeadline(s) {
   const dt = new Date(+y, mo - 1, +d, +hh, +mi);
   return dt.getMonth() === mo - 1 && dt.getDate() === +d && +hh < 24 && +mi < 60 ? dt : null;
 }
+// Kiểm tra 1 việc (dùng chung cho bảng nhập và CSV); `seen` gom "người|tên việc" để bắt trùng. Trả về chuỗi lỗi hoặc rỗng.
+function checkTask(p, title, dl, event, seen, noPerson = 'Email chưa có trong danh sách thành viên', noDate = 'Ngày sai định dạng (dùng 2025-12-31 hoặc 31/12/2025)') {
+  let bad = '';
+  if (S.projects.some((x) => x.closed_at && x.name.toLowerCase() === event.toLowerCase())) bad = 'Sự kiện này đã hoàn thành';
+  else if (event.length > 100) bad = 'Tên sự kiện quá 100 ký tự';
+  else if (!p) bad = noPerson;
+  else if (!title || title.length > 200) bad = 'Thiếu tên việc hoặc quá 200 ký tự';
+  else if (!dl || isNaN(dl)) bad = noDate;
+  else if (dl < new Date()) bad = 'Hạn đã qua';
+  else if (seen.has(p.id + '|' + title.toLowerCase())) bad = 'Trùng việc đã có';
+  if (!bad) seen.add(p.id + '|' + title.toLowerCase());
+  return bad;
+}
+async function assignTasks(good) {
+  const ids = {}; for (const n of new Set(good.map((x) => x.event).filter(Boolean))) ids[n.toLowerCase()] = await ensureProject(n);
+  const { error } = await sb.from('tasks').insert(good.map((x) => ({ title: x.title, description: x.description, assignee: x.p.id, deadline: x.dl.toISOString(), project_id: ids[x.event.toLowerCase()] || null })));
+  if (error) throw error;
+}
+
+/* ---------- bảng nhập nhiều việc ngay trên web ---------- */
+function gridDialog() {
+  const m = modal(null); m.box.classList.add('wide');
+  const dl0 = () => toLocalInput(new Date(Date.now() + 7 * 864e5).setHours(23, 59));
+  const rows = [], tbody = h('tbody', {}), msg = h('p', { class: 'err' });
+  const list = h('datalist', { id: 'ev-list' }, S.projects.filter((x) => !x.closed_at).map((x) => h('option', { value: x.name })));
+  const isBlank = (r) => !r.who.value && !r.title.value.trim() && !r.event.value.trim() && !r.desc.value.trim();
+  function addRow(v = {}) {
+    const r = {
+      who: h('select', { 'aria-label': 'Người nhận' }, h('option', { value: '' }, '— Chọn người —'), S.profiles.map((x) => h('option', { value: x.id, selected: x.id === v.who }, x.name))),
+      title: h('input', { maxlength: '200', 'aria-label': 'Tên việc', value: v.title || '' }), dl: h('input', { type: 'datetime-local', 'aria-label': 'Hạn chót', value: v.dl ?? dl0() }),
+      event: h('input', { list: 'ev-list', maxlength: '100', 'aria-label': 'Sự kiện', value: v.event || '' }), desc: h('input', { 'aria-label': 'Mô tả', value: v.desc || '' }), err: h('td', { class: 'err' }),
+    };
+    r.tr = h('tr', {}, h('td', {}, r.who), h('td', {}, r.title), h('td', {}, r.dl), h('td', {}, r.event), h('td', {}, r.desc), r.err,
+      h('td', {}, h('button', { class: 'btn', type: 'button', 'aria-label': 'Xoá dòng', onclick: () => { rows.splice(rows.indexOf(r), 1); r.tr.remove(); } }, '×')));
+    rows.push(r); tbody.append(r.tr);
+  }
+  const paste = h('textarea', { rows: '3', placeholder: 'Dán các dòng copy từ Excel/Google Sheets, mỗi dòng: người nhận (email hoặc tên) | tên việc | hạn | sự kiện | mô tả' });
+  const fill = () => {
+    const byKey = {}; S.profiles.forEach((p) => { byKey[p.email.toLowerCase()] = p; byKey[p.name.toLowerCase()] = p; });
+    const data = parseCSV(paste.value); if (!data.length) return;
+    rows.filter(isBlank).forEach((r) => { rows.splice(rows.indexOf(r), 1); r.tr.remove(); });
+    data.forEach((r) => {
+      const raw = (r[2] || '').trim(), d = raw ? parseDeadline(raw) : null;
+      addRow({ who: byKey[(r[0] || '').trim().toLowerCase()]?.id, title: (r[1] || '').trim(), dl: raw ? (d ? toLocalInput(d) : '') : undefined, event: (r[3] || '').trim(), desc: (r[4] || '').trim() });
+    });
+    paste.value = '';
+  };
+  const go = h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+    msg.textContent = ''; const seen = new Set(S.tasks.map((t) => t.assignee + '|' + t.title.toLowerCase()));
+    const used = rows.filter((r) => !isBlank(r)); if (!used.length) { msg.textContent = tr('Chưa có dòng nào để giao.'); return; }
+    let bad = 0; const good = [];
+    used.forEach((r) => {
+      const p = S.profiles.find((x) => x.id === r.who.value), title = r.title.value.trim(), dl = r.dl.value ? new Date(r.dl.value) : null, event = r.event.value.trim();
+      const why = checkTask(p, title, dl, event, seen, 'Chưa chọn người nhận', 'Hạn chót không hợp lệ');
+      r.err.textContent = tr(why); r.tr.classList.toggle('bad', !!why);
+      if (why) bad++; else good.push({ p, title, dl, event, description: r.desc.value.trim() });
+    });
+    if (bad) { msg.textContent = tr(`Còn ${bad} dòng lỗi, sửa rồi bấm Giao lại.`); return; }
+    go.disabled = true;
+    try { await assignTasks(good); } catch (e) { go.disabled = false; return toast('Lỗi: ' + e.message); }
+    m.close(); toast(`Đã giao ${good.length} việc.`); await loadAll(); renderView();
+  } }, 'Giao tất cả');
+  for (let i = 0; i < 3; i++) addRow();
+  m.box.replaceChildren(h('h2', {}, 'Giao nhiều việc cùng lúc'), h('p', { class: 'muted' }, 'Mỗi dòng là một việc. Dòng để trống sẽ bị bỏ qua.'), list,
+    h('div', { class: 'scroll' }, h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['Người nhận', 'Việc', 'Hạn chót', 'Sự kiện', 'Mô tả', 'Lỗi', ''].map((x) => h('th', {}, x)))), tbody)),
+    h('div', { style: 'margin:8px 0' }, h('button', { class: 'btn', type: 'button', onclick: () => addRow() }, '+ Thêm dòng')),
+    h('details', {}, h('summary', {}, 'Dán từ Excel / Google Sheets'), paste, h('button', { class: 'btn', type: 'button', onclick: fill }, 'Điền vào bảng')),
+    msg, h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: m.close }, 'Huỷ'), go));
+}
+
 async function bulkFile(file) {
   if (!file.name.toLowerCase().endsWith('.csv')) return toast('Chỉ nhận file .csv (xuất từ Excel/Google Sheets: Lưu thành CSV).');
   const rows = parseCSV(await file.text());
@@ -339,25 +409,13 @@ async function bulkFile(file) {
   const items = rows.map((r, i) => {
     const email = (r[col.email] || '').trim().toLowerCase(), title = (r[col.title] || '').trim(), dl = parseDeadline(r[col.deadline] || ''), p = byEmail[email];
     const event = col.event >= 0 ? (r[col.event] || '').trim() : '';
-    let bad = '';
-    if (S.projects.some((x) => x.closed_at && x.name.toLowerCase() === event.toLowerCase())) bad = 'Sự kiện này đã hoàn thành';
-    else if (event.length > 100) bad = 'Tên sự kiện quá 100 ký tự';
-    else if (!p) bad = 'Email chưa có trong danh sách thành viên';
-    else if (!title || title.length > 200) bad = 'Thiếu tên việc hoặc quá 200 ký tự';
-    else if (!dl) bad = 'Ngày sai định dạng (dùng 2025-12-31 hoặc 31/12/2025)';
-    else if (dl < new Date()) bad = 'Hạn đã qua';
-    else if (seen.has(p.id + '|' + title.toLowerCase())) bad = 'Trùng việc đã có';
-    if (!bad) seen.add(p.id + '|' + title.toLowerCase());
+    const bad = checkTask(p, title, dl, event, seen);
     return { line: i + 2, email, title, dl, p, bad, event, description: col.description >= 0 ? (r[col.description] || '').trim() : '' };
   });
   const good = items.filter((x) => !x.bad), m = modal(null);
   const go = h('button', { class: 'btn primary', disabled: !good.length, onclick: async () => {
     go.disabled = true;
-    try {
-      const ids = {}; for (const n of new Set(good.map((x) => x.event).filter(Boolean))) ids[n.toLowerCase()] = await ensureProject(n);
-      const { error } = await sb.from('tasks').insert(good.map((x) => ({ title: x.title, description: x.description, assignee: x.p.id, deadline: x.dl.toISOString(), project_id: ids[x.event.toLowerCase()] || null })));
-      if (error) throw error;
-    } catch (e) { go.disabled = false; return toast('Lỗi: ' + e.message); }
+    try { await assignTasks(good); } catch (e) { go.disabled = false; return toast('Lỗi: ' + e.message); }
     m.close(); toast(`Đã giao ${good.length} việc.`); await loadAll(); renderView();
   } }, `Giao ${good.length} việc hợp lệ`);
   m.box.replaceChildren(h('h2', {}, 'Xem trước phân công'), h('p', { class: 'muted' }, `${items.length} dòng: ${good.length} hợp lệ, ${items.length - good.length} lỗi (dòng lỗi sẽ bị bỏ qua).`),

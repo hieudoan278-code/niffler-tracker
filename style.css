@@ -198,3 +198,12 @@ tr.bad td { background: var(--red-wash); }
 .sticker.big { width: 168px; }
 .login-box .sticker { border-radius: 0; box-shadow: none; background: none; height: auto; }
 .linkbtn[aria-label="Language"] { font-weight: 700; }
+
+.dialog.wide { width: min(1120px, 96vw); max-width: 96vw; }
+.grid { min-width: 940px; }
+.grid td { padding: 4px; vertical-align: top; }
+.grid input, .grid select { width: 100%; min-height: 36px; box-sizing: border-box; }
+.grid td.err { color: #b3261e; font-size: 12px; min-width: 110px; }
+.grid tr.bad td { background: #fdeceb; }
+.dialog details { margin: 8px 0; }
+.dialog details textarea { width: 100%; box-sizing: border-box; margin: 6px 0; }

@@ -56,6 +56,10 @@ const EN = {
   'Thêm người vào CLB': 'Add someone to the club', 'Email Google': 'Google email', 'Họ tên (không bắt buộc)': 'Full name (optional)', 'Để trống: người đó tự đặt tên': 'Leave empty: they will set their own name',
   'Vai trò': 'Role', 'Họ tên': 'Name', 'Email': 'Email', 'Đã đăng nhập': 'Signed in', 'Rồi': 'Yes', 'Chưa': 'Not yet', '(chưa đặt tên)': '(no name yet)', 'Bấm lần nữa để xoá (xoá cả việc của họ)': 'Click again to delete (also deletes their tasks)',
   'Đã đổi vai trò': 'Role changed',
+  'Giao nhiều việc: ': 'Assign several tasks: ', 'điền bảng ngay trên web, hoặc thả 1 file CSV vào đây.': 'fill in the table right here, or drop one CSV file here.', 'Giao nhiều việc': 'Assign several tasks', 'Nhập từ CSV': 'Import CSV',
+  'Giao nhiều việc cùng lúc': 'Assign several tasks at once', 'Mỗi dòng là một việc. Dòng để trống sẽ bị bỏ qua.': 'Each row is one task. Empty rows are ignored.', '— Chọn người —': '— Choose a person —', '+ Thêm dòng': '+ Add row', 'Xoá dòng': 'Delete row',
+  'Mô tả': 'Description', 'Lỗi': 'Error', 'Dán từ Excel / Google Sheets': 'Paste from Excel / Google Sheets', 'Điền vào bảng': 'Fill the table', 'Giao tất cả': 'Assign all', 'Chưa chọn người nhận': 'No assignee chosen', 'Hạn chót không hợp lệ': 'Invalid deadline',
+  'Chưa có dòng nào để giao.': 'No rows to assign.', 'Dán các dòng copy từ Excel/Google Sheets, mỗi dòng: người nhận (email hoặc tên) | tên việc | hạn | sự kiện | mô tả': 'Paste rows copied from Excel/Google Sheets, each row: assignee (email or name) | task | deadline | event | description',
   'Admin': 'Admin', 'Sự kiện đã hoàn thành!': 'Event completed!', 'Cảm ơn cả đội. Log sẽ được lưu vào Drive của Niffler.': "Thank you, team. The log will be saved to Niffler's Drive.", 'Tuyệt vời': 'Awesome',
 };
 for (const k of Object.keys(EN)) if (k !== k.trim()) EN[k.trim()] = EN[k].trim(); // khoá có khoảng trắng đầu/cuối vẫn khớp (tr() cắt khoảng trắng)
@@ -90,6 +94,7 @@ const PATTERNS = [
   [/^Bấm lần nữa để xoá sự kiện(?: và (\d+) việc)?$/, (m) => `Click again to delete the event${m[1] ? ` and ${m[1]} task${m[1] === '1' ? '' : 's'}` : ''}`],
   [/^Còn (\d+) việc chưa Hoàn thành\. Hoàn thành hết rồi mới đóng sự kiện được\.$/, (m) => `${m[1]} task${m[1] === '1' ? ' is' : 's are'} not Done yet. Finish them all before completing the event.`],
   [/^Sự kiện "(.*)" đã hoàn thành, đặt tên khác\.$/s, (m) => `Event "${m[1]}" is already completed, pick another name.`],
+  [/^Còn (\d+) dòng lỗi, sửa rồi bấm Giao lại\.$/, (m) => `${m[1]} row${m[1] === '1' ? ' has' : 's have'} errors. Fix ${m[1] === '1' ? 'it' : 'them'} and click Assign again.`],
   [/^Vai trò của (.*)$/s, (m) => `Role of ${m[1]}`],
   [/^chuyển (.*) → (.*)$/s, (m) => `moved ${tr(m[1])} → ${tr(m[2])}`],
   [/^dời hạn từ (.*) sang (.*)$/s, (m) => `moved the deadline from ${m[1]} to ${m[2]}`],

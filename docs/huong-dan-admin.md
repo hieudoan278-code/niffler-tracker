@@ -5,23 +5,14 @@ Tab **Thành viên** → nhập **email Google** và vai trò → **Thêm**. Kh�
 
 **Vai trò:** chỉ tài khoản `niffler.hugo@gmail.com` đổi được vai trò Admin/Thành viên (chọn ngay trong cột Vai trò) và thêm admin mới. Admin khác chỉ thêm được thành viên.
 
-## 2. Giao việc hàng loạt bằng 1 file CSV
-1. Tab **Tải mẫu** → tải `mau-phan-cong.csv`.
-2. Mở bằng Excel hoặc Google Sheets, điền mỗi việc một dòng, **giữ nguyên dòng đầu**:
+## 2. Giao nhiều việc cùng lúc
+Trên **Bảng việc**, bấm **Giao nhiều việc** để mở bảng nhập: mỗi dòng là một việc gồm người nhận (chọn trong danh sách), tên việc, hạn chót, sự kiện (chọn hoặc gõ tên mới) và mô tả. Bấm **+ Thêm dòng** để thêm, **×** để xoá dòng, dòng để trống sẽ bị bỏ qua.
 
-| Cột | Bắt buộc | Ví dụ |
-|---|---|---|
-| `email` | Có | `lan@gmail.com` (phải có trong tab Thành viên) |
-| `title` | Có | `Thiết kế poster` (tối đa 200 ký tự) |
-| `deadline` | Có | `2026-12-05 23:59` hoặc `05/12/2026` (không ghi giờ thì tính 23:59) |
-| `description` | Không | Mô tả ngắn |
-| `event` | Không | `Hugo Cup` (tên sự kiện, chưa có thì tự tạo) |
+**Dán từ Excel / Google Sheets:** mở mục *Dán từ Excel / Google Sheets*, dán các ô đã copy (cột theo thứ tự: người nhận (email hoặc tên), tên việc, hạn, sự kiện, mô tả), bấm **Điền vào bảng**. Hạn ghi dạng `2026-12-05 23:59` hoặc `05/12/2026` (không ghi giờ thì tính 23:59). Dòng lỗi (chưa chọn người, hạn đã qua, trùng việc…) báo đỏ ngay trên dòng; sửa xong bấm **Giao tất cả**.
 
-3. Lưu thành **CSV** (Excel: *Save As → CSV UTF-8*; Google Sheets: *Tải xuống → CSV*). Dùng UTF-8 để không lỗi tiếng Việt. Dấu `,` hoặc `;` đều được.
-4. Vào **Bảng việc**, thả file vào khung **Giao việc hàng loạt** (hoặc bấm Chọn file CSV).
-5. Đọc bảng **Xem trước**. Dòng đỏ là dòng lỗi và sẽ bị bỏ qua: email lạ, ngày sai, hạn đã qua, trùng việc đã có. Bấm **Giao N việc hợp lệ**.
+**Nhập từ file CSV (phụ):** bấm **Nhập từ CSV** hoặc thả file vào khung. Mẫu ở tab **Tải mẫu** (`mau-phan-cong.csv`, cột `email,title,deadline,description,event`; lưu *CSV UTF-8*). Có bảng xem trước, dòng lỗi bị bỏ qua.
 
-Mỗi việc rơi đúng vào cột **Nhận** của người có email đó.
+Mỗi việc rơi đúng vào cột **Nhận** của người được giao.
 
 ## 3. Giao một việc lẻ
 Có hai cách, không bắt buộc kéo thả:
