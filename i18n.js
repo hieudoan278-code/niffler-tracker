@@ -1,7 +1,8 @@
 /* Tiếng Việt (gốc) -> English. tr() dịch đúng nguyên chuỗi, hoặc theo mẫu cho chuỗi có số/tên. Thiếu bản dịch thì giữ tiếng Việt. */
-let LANG = 'vi';
-try { LANG = localStorage.getItem('lang') === 'en' ? 'en' : 'vi'; } catch (e) { /* chế độ riêng tư: dùng mặc định */ }
-const setLang = (l) => { LANG = l; try { localStorage.setItem('lang', l); } catch (e) { /* bỏ qua */ } document.documentElement.lang = l; };
+// Mặc định là tiếng Anh (CLB tiếng Anh). Khoá lưu mới 'niffler_lang' để mọi người bắt đầu từ tiếng Anh, kể cả máy từng chọn tiếng Việt trước đây.
+let LANG = 'en';
+try { LANG = localStorage.getItem('niffler_lang') === 'vi' ? 'vi' : 'en'; } catch (e) { /* chế độ riêng tư: dùng mặc định */ }
+const setLang = (l) => { LANG = l; try { localStorage.setItem('niffler_lang', l); } catch (e) { /* bỏ qua */ } document.documentElement.lang = l; };
 const LOCALE = () => (LANG === 'en' ? 'en-GB' : 'vi-VN');
 
 const EN = {
