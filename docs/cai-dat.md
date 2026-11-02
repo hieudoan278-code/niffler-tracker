@@ -23,6 +23,7 @@ Lưu logo của CLB thành `assets/logo.png` (PNG, vuông, nền trong hoặc tr
 
 ## 4. Mail tự động (Apps Script)
 1. Đăng nhập Chrome bằng `niffler.hugo@gmail.com` → script.google.com → **New project** → dán `reminder.gs`.
+   (Từ bản có Sự kiện: script cũng tạo Google Doc log trong Drive, nên khi chạy `setup` lại sẽ xin thêm quyền Drive/Docs. Dán lại bản `reminder.gs` mới trước.)
 2. **Project Settings → Script properties** thêm:
    - `SUPABASE_URL` = Project URL
    - `SERVICE_KEY` = *service_role key* (Supabase Settings → API; khoá **bí mật**, không dán lên GitHub hay gửi người khác)

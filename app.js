@@ -4,8 +4,20 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const $app = document.getElementById('app');
 const STATUS = { todo: 'Nhận', doing: 'Đang làm', done: 'Hoàn thành' };
 const ORDER = ['todo', 'doing', 'done'];
-const S = { me: null, profiles: [], tasks: [], meetings: [], events: [], view: 'board', mine: false, openTask: null };
+const S = { me: null, profiles: [], tasks: [], meetings: [], events: [], projects: [], view: 'board', mine: false, proj: '', openTask: null };
+const SUPER = 'niffler.hugo@gmail.com'; // chỉ tài khoản này đổi được vai trò (DB cũng chặn bằng trigger profiles_role_guard)
 const isAdmin = () => S.me?.role === 'admin';
+const isSuper = () => S.me?.email?.toLowerCase() === SUPER;
+// "Sự kiện" trong UI = bảng projects (bảng events là mốc timeline). Việc của sự kiện đã đóng bị ẩn khỏi bảng/timeline.
+const projMap = () => Object.fromEntries(S.projects.map((p) => [p.id, p]));
+const live = () => { const pm = projMap(); return S.tasks.filter((t) => !pm[t.project_id]?.closed_at); };
+async function ensureProject(name) {
+  name = name.trim(); if (!name) return null;
+  const hit = S.projects.find((p) => p.name.toLowerCase() === name.toLowerCase());
+  if (hit) return hit.closed_at ? Promise.reject(new Error(`Sự kiện "${hit.name}" đã hoàn thành, đặt tên khác.`)) : hit.id;
+  const { data, error } = await sb.from('projects').insert({ name }).select().single();
+  if (error) throw error; S.projects.push(data); return data.id;
+}
 
 /* ---------- tiện ích ---------- */
 // replaceChildren gốc in ra "false" và "[object ...]": làm nó bỏ qua false/null và mở mảng, giống h().
@@ -90,11 +102,12 @@ async function boot() {
   if (!S.me.named) nameDialog(true);
 }
 async function loadAll() {
-  const [p, t, m, e] = await Promise.all([
+  const [p, t, m, e, pr] = await Promise.all([
     sb.from('profiles').select('*').order('name'), sb.from('tasks').select('*').order('deadline'),
     sb.from('meetings').select('*').order('held_on', { ascending: false }), sb.from('events').select('*').order('on_date'),
+    sb.from('projects').select('*').order('created_at'),
   ]);
-  S.profiles = p.data || []; S.tasks = t.data || []; S.meetings = m.data || []; S.events = e.data || [];
+  S.profiles = p.data || []; S.tasks = t.data || []; S.meetings = m.data || []; S.events = e.data || []; S.projects = pr.data || [];
   // chưa đặt tên thì hiện phần trước @ của email; named = đã tự đặt tên
   S.profiles.forEach((x) => { x.named = !!x.name; x.name = x.name || x.email.split('@')[0]; });
   if (S.me) S.me = S.profiles.find((x) => x.id === S.me.id) || S.me;
@@ -109,7 +122,7 @@ function subscribe() {
 /* ---------- khung trang ---------- */
 const TABS = [['board', 'Bảng việc'], ['timeline', 'Timeline'], ['meetings', 'Log họp'], ['guide', 'Hướng dẫn'], ['templates', 'Tải mẫu']];
 function renderShell() {
-  const tabs = [...TABS, ...(isAdmin() ? [['members', 'Thành viên']] : [])];
+  const tabs = [...TABS, ...(isAdmin() ? [['projects', 'Sự kiện'], ['members', 'Thành viên']] : [])];
   $app.replaceChildren(
     h('header', { class: 'top' },
       h('div', { class: 'brand' }, h('img', { src: 'assets/logo.png', alt: '' }), h('span', {}, 'Niffler')),
@@ -121,7 +134,7 @@ function renderShell() {
   renderView();
 }
 function renderView() {
-  ({ board: renderBoard, timeline: renderTimeline, meetings: renderMeetings, guide: renderGuide, templates: renderTemplates, members: renderMembers }[S.view])();
+  ({ board: renderBoard, timeline: renderTimeline, meetings: renderMeetings, guide: renderGuide, templates: renderTemplates, projects: renderProjects, members: renderMembers }[S.view])();
 }
 const head = (title, ...right) => h('div', { class: 'pagehead' }, h('h1', {}, title), h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, right));
 
@@ -138,6 +151,7 @@ function card(t) {
   const idx = ORDER.indexOf(t.status);
   const mv = (dir) => h('button', { class: 'btn', 'aria-label': `Chuyển "${t.title}" sang ${STATUS[ORDER[idx + dir]]}`, onclick: (e) => { e.stopPropagation(); moveTask(t, ORDER[idx + dir]); } }, svg(dir < 0 ? ICON.left : ICON.right), ' ', STATUS[ORDER[idx + dir]]);
   const el = h('div', { class: `task status-${t.status}${w.cls === 'late' ? ' late' : ''}`, draggable: can ? 'true' : false, tabindex: '0', role: 'button', 'aria-label': `${t.title}. ${w.txt}` },
+    projMap()[t.project_id] && h('div', { class: 'evtag' }, projMap()[t.project_id].name),
     h('div', { class: 'title' }, t.title),
     h('div', { class: 'meta' }, h('span', {}, 'Hạn ' + fmtDay(t.deadline)), h('span', { class: 'chip ' + w.cls }, w.txt)),
     can && h('div', { class: 'movers' }, idx > 0 && mv(-1), idx < 2 && mv(1)));
@@ -148,16 +162,21 @@ function card(t) {
   return el;
 }
 function renderBoard() {
-  const v = $('#view'), late = S.tasks.filter(isLate), soon = S.tasks.filter((t) => when(t).cls === 'soon');
+  const open = S.projects.filter((p) => !p.closed_at);
+  if (S.proj && S.proj !== 'none' && !open.some((p) => p.id === S.proj)) S.proj = '';
+  const tasks = live().filter((t) => !S.proj || (S.proj === 'none' ? !t.project_id : t.project_id === S.proj));
+  const v = $('#view'), late = tasks.filter(isLate);
   const byP = Object.fromEntries(S.profiles.map((p) => [p.id, []]));
-  S.tasks.forEach((t) => byP[t.assignee]?.push(t));
+  tasks.forEach((t) => byP[t.assignee]?.push(t));
+  const filter = open.length > 0 && h('label', { class: 'muted' }, 'Sự kiện: ', h('select', { onchange: (e) => { S.proj = e.target.value; renderBoard(); } },
+    h('option', { value: '' }, 'Tất cả'), open.map((p) => h('option', { value: p.id, selected: S.proj === p.id }, p.name)), h('option', { value: 'none', selected: S.proj === 'none' }, 'Không thuộc sự kiện')));
   let people = S.profiles.filter((p) => p.role === 'member' || byP[p.id].length || p.id === S.me.id);
   people.sort((a, b) => (b.id === S.me.id) - (a.id === S.me.id) || (a.name || a.email).localeCompare(b.name || b.email, 'vi'));
   if (S.mine) people = people.filter((p) => p.id === S.me.id);
   v.replaceChildren(
-    head('Bảng việc', isAdmin() && h('button', { class: 'btn hot', onclick: () => createDialog(null, null) }, '+ Thêm việc'), h('label', { class: 'muted' }, h('input', { type: 'checkbox', checked: S.mine, onchange: (e) => { S.mine = e.target.checked; renderBoard(); } }), ' Chỉ việc của tôi')),
+    head('Bảng việc', isAdmin() && h('button', { class: 'btn hot', onclick: () => createDialog(null, null) }, '+ Thêm việc'), filter, h('label', { class: 'muted' }, h('input', { type: 'checkbox', checked: S.mine, onchange: (e) => { S.mine = e.target.checked; renderBoard(); } }), ' Chỉ việc của tôi')),
     isAdmin() && late.length > 0 && h('div', { class: 'banner late', role: 'alert' }, `${late.length} việc đang trễ hạn: ` + late.slice(0, 4).map((t) => `${t.title} (${pmap()[t.assignee]?.name || '?'})`).join('; ') + (late.length > 4 ? '…' : '')),
-    !isAdmin() && S.tasks.some((t) => t.assignee === S.me.id && when(t).cls !== '' && t.status !== 'done') && h('div', { class: 'banner soon' }, 'Bạn có việc sắp đến hạn hoặc đã trễ. Mở thẻ để xem chi tiết.'),
+    !isAdmin() && tasks.some((t) => t.assignee === S.me.id && when(t).cls !== '' && t.status !== 'done') && h('div', { class: 'banner soon' }, 'Bạn có việc sắp đến hạn hoặc đã trễ. Mở thẻ để xem chi tiết.'),
     isAdmin() && bulkZone(),
     people.length === 0 && h('p', { class: 'muted' }, 'Chưa có thành viên. Admin thêm ở tab "Thành viên".'),
     people.map((p) => lane(p, byP[p.id])));
@@ -198,6 +217,8 @@ function createDialog(p, file) {
   const title = h('input', { value: file ? file.name.replace(/.[^.]+$/, '') : '', required: true, maxlength: '200', placeholder: 'Ví dụ: Thiết kế poster' });
   const dl = h('input', { type: 'datetime-local', value: toLocalInput(new Date(Date.now() + 7 * 864e5).setHours(23, 59)), required: true });
   const desc = h('textarea', {});
+  const proj = h('select', {}, h('option', { value: '' }, 'Không thuộc sự kiện'), S.projects.filter((x) => !x.closed_at).map((x) => h('option', { value: x.id, selected: x.id === S.proj }, x.name)));
+  const newProj = h('input', { maxlength: '100', placeholder: 'Hoặc gõ tên sự kiện mới' });
   const fileIn = h('input', { type: 'file', onchange: () => { chosen = fileIn.files[0] || null; } });
   const err = h('p', { class: 'err' });
   const go = h('button', { class: 'btn primary', type: 'submit' }, 'Giao việc');
@@ -206,13 +227,15 @@ function createDialog(p, file) {
     try {
       const id = crypto.randomUUID(), person = S.profiles.find((x) => x.id === who.value);
       const brief_path = chosen ? await upload(`brief/${id}/${Date.now()}-${safeName(chosen.name)}`, chosen) : null;
-      const { error } = await sb.from('tasks').insert({ id, title: title.value.trim(), description: desc.value, assignee: who.value, deadline: new Date(dl.value).toISOString(), brief_path });
+      const project_id = newProj.value.trim() ? await ensureProject(newProj.value) : proj.value || null;
+      const { error } = await sb.from('tasks').insert({ id, title: title.value.trim(), description: desc.value, assignee: who.value, deadline: new Date(dl.value).toISOString(), brief_path, project_id });
       if (error) throw error;
       m.close(); toast(`Đã giao "${title.value.trim()}" cho ${person.name}`); await loadAll(); renderView();
     } catch (x) { err.textContent = x.message; go.disabled = false; }
   } },
     h('h2', {}, 'Thêm việc mới'),
     h('label', { class: 'field' }, 'Giao cho', who), h('label', { class: 'field' }, 'Tên việc', title), h('label', { class: 'field' }, 'Hạn chót', dl),
+    h('label', { class: 'field' }, 'Sự kiện', proj, newProj),
     h('label', { class: 'field' }, 'Mô tả (không bắt buộc)', desc),
     h('label', { class: 'field' }, file ? `File đính kèm: ${file.name} (chọn file khác nếu cần)` : 'File đính kèm (không bắt buộc)', fileIn), err,
     h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', onclick: m.close }, 'Huỷ'), go));
@@ -295,31 +318,37 @@ async function bulkFile(file) {
   if (!file.name.toLowerCase().endsWith('.csv')) return toast('Chỉ nhận file .csv (xuất từ Excel/Google Sheets: Lưu thành CSV).');
   const rows = parseCSV(await file.text());
   const hdr = rows.shift()?.map((x) => x.trim().toLowerCase()) || [];
-  const col = Object.fromEntries(['email', 'title', 'deadline', 'description'].map((k) => [k, hdr.indexOf(k)]));
+  const col = Object.fromEntries(['email', 'title', 'deadline', 'description', 'event'].map((k) => [k, hdr.indexOf(k)]));
   if (col.email < 0 || col.title < 0 || col.deadline < 0) return toast('Dòng đầu phải có các cột: email, title, deadline (và description). Xem file mẫu.');
   const byEmail = Object.fromEntries(S.profiles.map((p) => [p.email.toLowerCase(), p]));
   const seen = new Set(S.tasks.map((t) => t.assignee + '|' + t.title.toLowerCase()));
   const items = rows.map((r, i) => {
     const email = (r[col.email] || '').trim().toLowerCase(), title = (r[col.title] || '').trim(), dl = parseDeadline(r[col.deadline] || ''), p = byEmail[email];
+    const event = col.event >= 0 ? (r[col.event] || '').trim() : '';
     let bad = '';
-    if (!p) bad = 'Email chưa có trong danh sách thành viên';
+    if (S.projects.some((x) => x.closed_at && x.name.toLowerCase() === event.toLowerCase())) bad = 'Sự kiện này đã hoàn thành';
+    else if (event.length > 100) bad = 'Tên sự kiện quá 100 ký tự';
+    else if (!p) bad = 'Email chưa có trong danh sách thành viên';
     else if (!title || title.length > 200) bad = 'Thiếu tên việc hoặc quá 200 ký tự';
     else if (!dl) bad = 'Ngày sai định dạng (dùng 2025-12-31 hoặc 31/12/2025)';
     else if (dl < new Date()) bad = 'Hạn đã qua';
     else if (seen.has(p.id + '|' + title.toLowerCase())) bad = 'Trùng việc đã có';
     if (!bad) seen.add(p.id + '|' + title.toLowerCase());
-    return { line: i + 2, email, title, dl, p, bad, description: col.description >= 0 ? (r[col.description] || '').trim() : '' };
+    return { line: i + 2, email, title, dl, p, bad, event, description: col.description >= 0 ? (r[col.description] || '').trim() : '' };
   });
   const good = items.filter((x) => !x.bad), m = modal(null);
   const go = h('button', { class: 'btn primary', disabled: !good.length, onclick: async () => {
     go.disabled = true;
-    const { error } = await sb.from('tasks').insert(good.map((x) => ({ title: x.title, description: x.description, assignee: x.p.id, deadline: x.dl.toISOString() })));
-    if (error) { go.disabled = false; return toast('Lỗi: ' + error.message); }
+    try {
+      const ids = {}; for (const n of new Set(good.map((x) => x.event).filter(Boolean))) ids[n.toLowerCase()] = await ensureProject(n);
+      const { error } = await sb.from('tasks').insert(good.map((x) => ({ title: x.title, description: x.description, assignee: x.p.id, deadline: x.dl.toISOString(), project_id: ids[x.event.toLowerCase()] || null })));
+      if (error) throw error;
+    } catch (e) { go.disabled = false; return toast('Lỗi: ' + e.message); }
     m.close(); toast(`Đã giao ${good.length} việc.`); await loadAll(); renderView();
   } }, `Giao ${good.length} việc hợp lệ`);
   m.box.replaceChildren(h('h2', {}, 'Xem trước phân công'), h('p', { class: 'muted' }, `${items.length} dòng: ${good.length} hợp lệ, ${items.length - good.length} lỗi (dòng lỗi sẽ bị bỏ qua).`),
-    h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Dòng', 'Người nhận', 'Việc', 'Hạn', 'Trạng thái'].map((x) => h('th', {}, x)))),
-      h('tbody', {}, items.map((x) => h('tr', { class: x.bad ? 'bad' : '' }, h('td', {}, x.line), h('td', {}, x.p?.name || x.email), h('td', {}, x.title), h('td', {}, x.dl ? fmt(x.dl) : '—'), h('td', {}, x.bad || 'OK')))))),
+    h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Dòng', 'Người nhận', 'Việc', 'Sự kiện', 'Hạn', 'Trạng thái'].map((x) => h('th', {}, x)))),
+      h('tbody', {}, items.map((x) => h('tr', { class: x.bad ? 'bad' : '' }, h('td', {}, x.line), h('td', {}, x.p?.name || x.email), h('td', {}, x.title), h('td', {}, x.event || '—'), h('td', {}, x.dl ? fmt(x.dl) : '—'), h('td', {}, x.bad || 'OK')))))),
     h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: m.close }, 'Huỷ'), go));
 }
 
@@ -339,6 +368,8 @@ function openDrawer(id) {
     h('header', {}, h('h2', {}, t.title), h('button', { class: 'btn', onclick: closeDrawer }, 'Đóng')),
     h('section', {}, h('dl', { class: 'kv' },
       h('dt', {}, 'Người làm'), h('dd', {}, P?.name || P?.email), h('dt', {}, 'Trạng thái'), h('dd', {}, STATUS[t.status]),
+      h('dt', {}, 'Sự kiện'), h('dd', {}, isAdmin() ? h('select', { 'aria-label': 'Sự kiện', onchange: async (e) => { const { error } = await sb.from('tasks').update({ project_id: e.target.value || null }).eq('id', t.id); toast(error ? error.message : 'Đã đổi sự kiện'); await loadAll(); renderView(); openDrawer(t.id); } },
+        h('option', { value: '' }, 'Không thuộc sự kiện'), S.projects.filter((x) => !x.closed_at).map((x) => h('option', { value: x.id, selected: x.id === t.project_id }, x.name))) : (projMap()[t.project_id]?.name || '—')),
       h('dt', {}, 'Hạn chót'), h('dd', {}, fmt(t.deadline) + ' ', h('span', { class: 'chip ' + w.cls }, w.txt)),
       h('dt', {}, 'File giao việc'), h('dd', {}, fileLink(t.brief_path)), h('dt', {}, 'Minh chứng'), h('dd', {}, fileLink(t.proof_path))),
       t.description && h('p', { style: 'white-space:pre-wrap' }, t.description),
@@ -373,7 +404,7 @@ async function loadDrawerLists(id) {
 /* ---------- timeline tổng ---------- */
 function renderTimeline() {
   const v = $('#view'), DAY = 28, P = S.profiles;
-  const tasks = S.tasks, now = new Date();
+  const tasks = live(), now = new Date();
   const start = new Date(Math.min(now - 7 * 864e5, ...tasks.map((t) => +new Date(t.created_at)), ...S.meetings.map((m) => +new Date(m.held_on)))); start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // lùi về thứ Hai để nhãn tuần không đè nhau
   const end = new Date(Math.max(+now + 21 * 864e5, ...tasks.map((t) => +new Date(t.deadline)), ...S.events.map((e) => +new Date(e.on_date)))); end.setDate(end.getDate() + 3);
@@ -397,7 +428,7 @@ function renderTimeline() {
       rows.map(({ p, ts }) => h('div', { class: 'tl-row', style: `min-height:${ts.length * 28 + 12}px` }, h('div', { class: 'name' }, p.name || p.email),
         track('', h('div', { class: 'today', style: `left:${todayX}px` }), ts.map((t, i) => {
           const l = x(t.created_at), w = Math.max(x(t.deadline) - l, 110), c = isLate(t) ? 'late' : t.status;
-          return h('button', { class: `bar ${c}`, style: `left:${l}px;width:${w}px;top:${6 + i * 28}px`, title: `${t.title} — hạn ${fmt(t.deadline)}`, onclick: () => openDrawer(t.id) }, t.title);
+          return h('button', { class: `bar ${c}`, style: `left:${l}px;width:${w}px;top:${6 + i * 28}px`, title: `${t.title} — hạn ${fmt(t.deadline)}`, onclick: () => openDrawer(t.id) }, (projMap()[t.project_id] ? `[${projMap()[t.project_id].name}] ` : '') + t.title);
         }))))),
     rows.length === 0 && h('p', { class: 'muted', style: 'padding:14px' }, 'Chưa có việc nào để vẽ.')));
 }
@@ -439,15 +470,42 @@ function renderTemplates() {
   $('#view').replaceChildren(head('Tải mẫu'), h('div', { class: 'tplgrid' }, T.map(([href, t, d]) => h('div', { class: 'tpl' }, h('h2', { style: 'font-size:18px' }, t), h('p', { class: 'muted' }, d), h('a', { class: 'btn primary', href, download: '', style: 'text-decoration:none;text-align:center' }, 'Tải về')))));
 }
 
+/* ---------- sự kiện (admin): gom việc, hoàn thành sự kiện -> Apps Script xuất log vào Drive ---------- */
+function renderProjects() {
+  const name = h('input', { required: true, maxlength: '100', placeholder: 'Ví dụ: Chung kết Hugo Cup' });
+  const stat = (p) => { const ts = S.tasks.filter((t) => t.project_id === p.id); return { n: ts.length, done: ts.filter((t) => t.status === 'done').length }; };
+  const row = (p) => {
+    const { n, done } = stat(p);
+    const act = p.closed_at
+      ? (p.drive_url ? h('a', { href: p.drive_url, target: '_blank', rel: 'noopener' }, 'Mở log trong Drive') : h('span', { class: 'muted' }, 'Đang tạo log trong Drive (tối đa ~1 giờ)…'))
+      : h('button', { class: 'btn', onclick: async (e) => {
+        if (done < n) return toast(`Còn ${n - done} việc chưa Hoàn thành. Hoàn thành hết rồi mới đóng sự kiện được.`);
+        if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để hoàn thành sự kiện'; return; }
+        const { error } = await sb.from('projects').update({ closed_at: new Date().toISOString() }).eq('id', p.id);
+        if (error) return toast(error.message); await loadAll(); renderProjects(); toast('Đã hoàn thành sự kiện. Log sẽ được lưu vào Drive của Niffler.');
+      } }, 'Hoàn thành sự kiện');
+    return h('tr', {}, h('td', {}, p.name), h('td', {}, `${done}/${n} việc xong`), h('td', {}, p.closed_at ? 'Đã hoàn thành ' + fmt(p.closed_at) : 'Đang chạy'), h('td', {}, act));
+  };
+  const rows = [...S.projects].sort((a, b) => !!a.closed_at - !!b.closed_at || a.name.localeCompare(b.name, 'vi'));
+  $('#view').replaceChildren(head('Sự kiện'),
+    h('form', { class: 'meeting', onsubmit: async (e) => { e.preventDefault(); try { await ensureProject(name.value); } catch (x) { return toast(x.message); } name.value = ''; await loadAll(); renderProjects(); } },
+      h('h2', {}, 'Thêm sự kiện'), h('label', { class: 'field' }, 'Tên sự kiện', name), h('button', { class: 'btn primary', type: 'submit' }, 'Thêm')),
+    rows.length ? h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Sự kiện', 'Tiến độ', 'Trạng thái', ''].map((x) => h('th', {}, x)))), h('tbody', {}, rows.map(row))))
+      : h('p', { class: 'muted' }, 'Chưa có sự kiện. Thêm ở trên, hoặc gõ tên sự kiện khi giao việc / thêm cột event vào file CSV.'));
+}
+
 /* ---------- thành viên (admin) ---------- */
 function renderMembers() {
-  const email = h('input', { type: 'email', required: true, placeholder: 'ten@gmail.com' }), name = h('input', { placeholder: 'Để trống: người đó tự đặt tên' }), role = h('select', {}, h('option', { value: 'member' }, 'Thành viên'), h('option', { value: 'admin' }, 'Admin'));
+  const email = h('input', { type: 'email', required: true, placeholder: 'ten@gmail.com' }), name = h('input', { placeholder: 'Để trống: người đó tự đặt tên' }), role = h('select', {}, h('option', { value: 'member' }, 'Thành viên'), isSuper() && h('option', { value: 'admin' }, 'Admin'));
+  const roleCell = (p) => !isSuper() || p.email.toLowerCase() === SUPER ? (p.role === 'admin' ? 'Admin' : 'Thành viên')
+    : h('select', { 'aria-label': 'Vai trò của ' + p.name, onchange: async (e) => { const { error } = await sb.from('profiles').update({ role: e.target.value }).eq('id', p.id); toast(error ? error.message : 'Đã đổi vai trò'); await loadAll(); renderMembers(); } },
+      h('option', { value: 'member', selected: p.role === 'member' }, 'Thành viên'), h('option', { value: 'admin', selected: p.role === 'admin' }, 'Admin'));
   $('#view').replaceChildren(head('Thành viên'),
     h('form', { class: 'meeting', onsubmit: async (e) => { e.preventDefault(); const { error } = await sb.from('profiles').insert({ email: email.value.trim().toLowerCase(), name: name.value.trim(), role: role.value }); if (error) return toast(error.message); await loadAll(); renderMembers(); } },
       h('h2', {}, 'Thêm người vào CLB'), h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;margin-top:8px' }, h('label', { class: 'field' }, 'Email Google', email), h('label', { class: 'field' }, 'Họ tên (không bắt buộc)', name), h('label', { class: 'field' }, 'Vai trò', role)),
       h('button', { class: 'btn primary', type: 'submit' }, 'Thêm')),
     h('div', { class: 'scroll' }, h('table', {}, h('thead', {}, h('tr', {}, ['Họ tên', 'Email', 'Vai trò', 'Đã đăng nhập', ''].map((x) => h('th', {}, x)))),
-      h('tbody', {}, S.profiles.map((p) => h('tr', {}, h('td', {}, p.named ? p.name : '(chưa đặt tên)'), h('td', {}, p.email), h('td', {}, p.role === 'admin' ? 'Admin' : 'Thành viên'), h('td', {}, p.auth_id ? 'Rồi' : 'Chưa'),
+      h('tbody', {}, S.profiles.map((p) => h('tr', {}, h('td', {}, p.named ? p.name : '(chưa đặt tên)'), h('td', {}, p.email), h('td', {}, roleCell(p)), h('td', {}, p.auth_id ? 'Rồi' : 'Chưa'),
         h('td', {}, h('button', { class: 'btn', style: 'margin-right:6px', onclick: () => nameDialog(false, p) }, 'Đổi tên'), p.id !== S.me.id && h('button', { class: 'btn', onclick: async (e) => { if (!e.target.dataset.s) { e.target.dataset.s = 1; e.target.textContent = 'Bấm lần nữa để xoá (xoá cả việc của họ)'; return; } const { error } = await sb.from('profiles').delete().eq('id', p.id); if (error) return toast(error.message); await loadAll(); renderMembers(); } }, 'Xoá'))))))));
 }
 

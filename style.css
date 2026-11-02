@@ -184,3 +184,5 @@ tr.bad td { background: var(--red-wash); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 .who .btn.rename { min-height: 32px; padding: 3px 10px; background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.45); font-size: 13px; }
 .who .btn.rename:hover { background: rgba(255,255,255,.28); }
+
+.evtag { font-size: 11px; font-weight: 700; color: #6a0f7a; background: #f1e3f4; border-radius: 4px; padding: 1px 6px; margin-bottom: 4px; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

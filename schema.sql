@@ -180,3 +180,75 @@ grant execute on function set_my_name(text) to authenticated;
 
 -- ---------- admin đầu tiên (ĐỔI EMAIL RỒI CHẠY) ----------
 -- insert into profiles(email, name, role) values ('niffler.hugo@gmail.com', 'Niffler Admin', 'admin');
+
+-- =====================================================================
+-- PHẦN 2: vai trò chỉ Niffler đổi + Sự kiện (projects).
+-- Nếu đã cài phần 1 rồi: chỉ cần chạy từ dòng này trở xuống trong SQL Editor.
+-- =====================================================================
+
+-- ---------- chỉ niffler.hugo@gmail.com được đổi vai trò / thêm admin / xoá chính nó ----------
+create or replace function profiles_role_guard() returns trigger language plpgsql security definer set search_path = public as $$
+declare super boolean := lower(coalesce(auth.jwt() ->> 'email', '')) = 'niffler.hugo@gmail.com';
+begin
+  if auth.uid() is null then return coalesce(new, old); end if;   -- SQL Editor / service key
+  if tg_op = 'DELETE' then
+    if lower(old.email) = 'niffler.hugo@gmail.com' then raise exception 'Không xoá được tài khoản Niffler'; end if;
+    return old;
+  end if;
+  if tg_op = 'UPDATE' and lower(old.email) = 'niffler.hugo@gmail.com' and (new.role <> 'admin' or lower(new.email) <> 'niffler.hugo@gmail.com') then
+    raise exception 'Không đổi được vai trò hay email của tài khoản Niffler';
+  end if;
+  if not super and ((tg_op = 'INSERT' and new.role <> 'member') or (tg_op = 'UPDATE' and new.role is distinct from old.role)) then
+    raise exception 'Chỉ tài khoản Niffler được đổi vai trò';
+  end if;
+  return new;
+end $$;
+create trigger profiles_role_guard_trg before insert or update or delete on profiles for each row execute function profiles_role_guard();
+
+-- ---------- sự kiện ----------
+create table projects (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique check (length(name) between 1 and 100),
+  closed_at timestamptz,          -- đặt khi admin bấm "Hoàn thành sự kiện"
+  drive_url text,                 -- Apps Script điền sau khi tạo log trong Drive
+  created_at timestamptz not null default now()
+);
+alter table tasks add column project_id uuid references projects(id) on delete set null;
+create index on tasks(project_id);
+alter table projects enable row level security;
+create policy read_projects on projects for select using (me() is not null);
+create policy admin_projects on projects for all using (is_admin()) with check (is_admin());
+alter publication supabase_realtime add table projects;
+
+-- member không được đổi project_id của việc mình (thêm vào danh sách cột bị khoá)
+create or replace function tasks_guard() returns trigger language plpgsql security definer set search_path = public as $$
+declare actor uuid := me();
+begin
+  if tg_op = 'INSERT' then
+    insert into task_events(task_id, actor, kind, detail)
+      values (new.id, actor, 'created', jsonb_build_object('title', new.title, 'deadline', new.deadline));
+    return new;
+  end if;
+  if auth.uid() is not null and not is_admin() then
+    if old.assignee <> actor then raise exception 'Không phải việc của bạn'; end if;
+    if (new.title, new.description, new.assignee, new.deadline, new.brief_path, new.reminded, new.overdue_notified, new.created_at, new.project_id)
+       is distinct from
+       (old.title, old.description, old.assignee, old.deadline, old.brief_path, old.reminded, old.overdue_notified, old.created_at, old.project_id) then
+      raise exception 'Bạn chỉ được đổi trạng thái và minh chứng';
+    end if;
+  end if;
+  if new.status is distinct from old.status then
+    insert into task_events(task_id, actor, kind, detail) values (new.id, actor, 'status', jsonb_build_object('from', old.status, 'to', new.status));
+  end if;
+  if new.deadline is distinct from old.deadline then
+    insert into task_events(task_id, actor, kind, detail) values (new.id, actor, 'deadline', jsonb_build_object('from', old.deadline, 'to', new.deadline));
+    new.reminded := false; new.overdue_notified := false;
+  end if;
+  if new.assignee is distinct from old.assignee then
+    insert into task_events(task_id, actor, kind, detail) values (new.id, actor, 'assignee', jsonb_build_object('from', old.assignee, 'to', new.assignee));
+  end if;
+  if new.proof_path is distinct from old.proof_path then
+    insert into task_events(task_id, actor, kind, detail) values (new.id, actor, 'proof', jsonb_build_object('path', new.proof_path));
+  end if;
+  return new;
+end $$;

@@ -2,7 +2,7 @@
  * Niffler Tracker — gửi mail nhắc hạn / báo trễ hạn.
  * Dán vào Apps Script khi đăng nhập bằng niffler.hugo@gmail.com (mail gửi từ chính tài khoản này, không cần mật khẩu).
  * Project Settings > Script properties: SUPABASE_URL, SERVICE_KEY (service_role, KHÔNG đưa lên GitHub), APP_URL.
- * Chạy `setup` một lần (cấp quyền gửi mail); sau đó trigger tự chạy `run` mỗi giờ.
+ * Chạy `setup` một lần (cấp quyền gửi mail + tạo Doc trong Drive); sau đó trigger tự chạy `run` mỗi giờ.
  */
 const PROP = PropertiesService.getScriptProperties();
 const SB = PROP.getProperty('SUPABASE_URL');
@@ -51,6 +51,43 @@ function run() {
       late.forEach((t) => { try { api_('tasks?id=eq.' + t.id, 'patch', { overdue_notified: true }); } catch (e) { console.error('late ' + t.id, e); } });
     }
   }
+
+  exportLogs_();
+}
+
+// 3) Sự kiện đã "Hoàn thành" trên web (closed_at) mà chưa có drive_url: tạo Google Doc log trong Drive của tài khoản này.
+const LOG_FOLDER = 'Niffler - Log sự kiện';
+function exportLogs_() {
+  const done = api_('projects?select=*&closed_at=not.is.null&drive_url=is.null');
+  done.forEach((p) => {
+    try {
+      const tasks = api_('tasks?select=id,title,deadline,proof_path,profiles(name,email)&project_id=eq.' + p.id + '&order=deadline');
+      const ids = tasks.map((t) => t.id).join(',');
+      const comments = tasks.length ? api_('comments?select=task_id,body,created_at,profiles(name)&task_id=in.(' + ids + ')&order=created_at') : [];
+      const evs = tasks.length ? api_('task_events?select=task_id,detail,created_at&kind=eq.status&task_id=in.(' + ids + ')&order=created_at') : [];
+      const doneAt = {}; evs.forEach((e) => { if (e.detail && e.detail.to === 'done') doneAt[e.task_id] = e.created_at; });
+      const doc = DocumentApp.create('Log sự kiện: ' + p.name + ' (' + Utilities.formatDate(new Date(p.closed_at), 'Asia/Ho_Chi_Minh', 'dd-MM-yyyy') + ')');
+      const body = doc.getBody();
+      body.appendParagraph(p.name).setHeading(DocumentApp.ParagraphHeading.TITLE);
+      body.appendParagraph('Hoàn thành lúc ' + fmt_(p.closed_at) + ' · ' + tasks.length + ' việc');
+      body.appendParagraph('Danh sách việc').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+      const rows = [['Người làm', 'Việc', 'Hạn', 'Hoàn thành lúc', 'Minh chứng (đường dẫn trong Supabase Storage)']];
+      tasks.forEach((t) => rows.push([t.profiles ? (t.profiles.name || t.profiles.email) : '?', t.title, fmt_(t.deadline), doneAt[t.id] ? fmt_(doneAt[t.id]) : '—', t.proof_path || '—']));
+      body.appendTable(rows);
+      if (comments.length) {
+        body.appendParagraph('Bình luận').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+        const title = {}; tasks.forEach((t) => { title[t.id] = t.title; });
+        comments.forEach((c) => body.appendListItem(fmt_(c.created_at) + ' · ' + (c.profiles ? c.profiles.name : '?') + ' · [' + title[c.task_id] + '] ' + c.body));
+      }
+      doc.saveAndClose();
+      DriveApp.getFileById(doc.getId()).moveTo(folder_());
+      api_('projects?id=eq.' + p.id, 'patch', { drive_url: doc.getUrl() });
+    } catch (e) { console.error('log ' + p.id, e); }   // lỗi thì lần sau thử lại
+  });
+}
+function folder_() {
+  const it = DriveApp.getFoldersByName(LOG_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(LOG_FOLDER);
 }
 
 function setup() {
