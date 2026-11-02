@@ -524,7 +524,7 @@ function renderMeetings() {
   v.replaceChildren(head('Log họp', q), isAdmin() && meetingForm(draw), list); draw();
 }
 const tplFile = () => `templates/mau-log-hop${LANG === 'en' ? '.en' : ''}.md`;
-const tplText = () => fetch(tplFile()).then((r) => r.text());
+const tplText = () => fetch(tplFile(), { cache: 'no-cache' }).then((r) => r.text());
 // Kiểm tra các thẻ giao việc CHƯA giao của trình soạn; tô lỗi trong thẻ. Trả về các việc hợp lệ sẵn sàng tạo.
 function validateTasks(ed, blocks) {
   const seen = new Set(S.tasks.map((t) => t.assignee + '|' + t.title.toLowerCase())), good = []; let bad = 0;
@@ -565,7 +565,7 @@ async function editLog(m, art, draw) {
     const finish = async (msg, createTasks) => {
       if (busy) return; busy = true; done.disabled = close.disabled = true;
       try {
-        ed.pruneBlankTasks(); await sync.flush(); const all = ed.read(); let made = 0;
+        await sync.flush(); const all = ed.read().filter((b) => !blankTask(b)); let made = 0;
         const ttl = title.value.trim() || m.title;
         if (createTasks) {
           const { ok, good } = validateTasks(ed, all);
@@ -580,7 +580,7 @@ async function editLog(m, art, draw) {
             }
           }
         }
-        const u = await sb.from('meetings').update({ title: ttl, held_on: date.value, body_md: blocksToMd(ed.read()), updated_at: new Date().toISOString() }).eq('id', m.id); if (u.error) throw u.error;
+        const u = await sb.from('meetings').update({ title: ttl, held_on: date.value, body_md: blocksToMd(all), updated_at: new Date().toISOString() }).eq('id', m.id); if (u.error) throw u.error;
         await sync.stop(); S.editing = null; await loadAll(); draw();
         toast(made ? L2(`Đã lưu log và giao ${made} việc`, `Log saved and ${made} task${made === 1 ? '' : 's'} assigned`) : msg);
       } catch (x) { toast('Lỗi: ' + x.message); } finally { busy = false; done.disabled = close.disabled = false; }
@@ -623,7 +623,7 @@ function meetingForm(redraw) {
 /* ---------- hướng dẫn, mẫu ---------- */
 async function renderGuide() {
   const v = $('#view'), docs = [['huong-dan-thanh-vien', 'Dành cho thành viên'], ...(isAdmin() ? [['huong-dan-admin', 'Dành cho admin']] : [])];
-  const out = h('article', { class: 'prose' }), pick = async (f) => { out.innerHTML = md(await (await fetch(`docs/${f}${LANG === 'en' ? '.en' : ''}.md`)).text()); };
+  const out = h('article', { class: 'prose' }), pick = async (f) => { out.innerHTML = md(await (await fetch(`docs/${f}${LANG === 'en' ? '.en' : ''}.md`, { cache: 'no-cache' })).text()); };
   v.replaceChildren(head('Hướng dẫn', docs.map(([f, l]) => h('button', { class: 'btn', onclick: () => pick(f) }, l))), out); pick(docs[isAdmin() ? 1 : 0][0]);
 }
 async function renderTemplates() {

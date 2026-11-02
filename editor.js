@@ -256,16 +256,16 @@ function blockEditor(opts = {}) {
   }
   // áp thay đổi từ người khác (realtime) vào đúng khối; khối mình đang gõ thì không bị ghi đè
   const remote = {
-    upsert(row) {
+    upsert(row, force) {
       const el = doc.querySelector(`[data-id="${row.id}"]`);
-      if (!el) { const nb = makeBlock(row), before = blocks().filter((c) => +c.dataset.pos < row.pos).pop(); before ? before.after(nb) : doc.prepend(nb); return; }
+      if (!el) { const nb = makeBlock(row), before = blocks().filter((c) => +c.dataset.pos < row.pos).pop(); before ? before.after(nb) : doc.prepend(nb); opts.onChange?.(); return; }
       el.dataset.pos = row.pos;
       const same = JSON.stringify(readBlock(el).content) === JSON.stringify(row.content) && (el.dataset.taskId || null) === (row.task_id || null) && el.dataset.type === row.type;
-      if (same || el.contains(document.activeElement)) return;
-      if (row.type === 'task' || el.dataset.type === 'task') { el.replaceWith(makeBlock(row)); return; }
-      setType(el, row.type); el.innerHTML = inlineToHtml(row.content?.t);
+      if (same || (!force && el.contains(document.activeElement))) return;
+      if (row.type === 'task' || el.dataset.type === 'task') el.replaceWith(makeBlock(row)); else { setType(el, row.type); el.innerHTML = inlineToHtml(row.content?.t); }
+      opts.onChange?.();
     },
-    remove(id) { doc.querySelector(`[data-id="${id}"]`)?.remove(); ensureOne(); },
+    remove(id) { doc.querySelector(`[data-id="${id}"]`)?.remove(); ensureOne(); opts.onChange?.(); },
   };
   const pruneBlankTasks = () => { blocks().filter((el) => el.dataset.type === 'task' && !el.dataset.taskId && !readTask(el).who && !readTask(el).whoText && !readTask(el).title).forEach((el) => el.remove()); ensureOne(); };
   const root = h('div', { class: 'ed' }, bar, doc, menu);
@@ -280,7 +280,7 @@ function blockEditor(opts = {}) {
 /* ---------- đồng bộ nhiều người cùng soạn (theo khối) ---------- */
 const TOKEN = uid();   // mỗi tab một mã: hai tab cùng tài khoản cũng thấy khoá của nhau
 function syncEditor(ed, meetingId, rows, onPresence) {
-  const known = new Map(rows.map((r) => [r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos }])), locks = new Map();
+  const known = new Map(rows.map((r) => [r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos, u: r.updated_at }])), locks = new Map();
   let timer = null, flushing = null, dirty = false, lockedEl = null, stopped = false;
   const pres = () => onPresence?.([...new Set([...locks.values()].filter((l) => l.until > Date.now()).map((l) => l.name))]);
   const rpc = (fn, a) => sb.rpc(fn, a);
@@ -304,14 +304,21 @@ function syncEditor(ed, meetingId, rows, onPresence) {
         });
         const del = [...known.keys()].filter((id) => !ids.has(id));
         if (ins.length) {
-          const { error } = await sb.from('meeting_blocks').insert(ins.map(({ _c, ...r }) => r)); if (error) throw error;
-          ins.forEach((r) => known.set(r.id, { type: r.type, c: r._c, pos: r.pos }));
+          const { data, error } = await sb.from('meeting_blocks').insert(ins.map(({ _c, ...r }) => r)).select('id,updated_at'); if (error) throw error;
+          const up = Object.fromEntries((data || []).map((d) => [d.id, d.updated_at]));
+          ins.forEach((r) => known.set(r.id, { type: r.type, c: r._c, pos: r.pos, u: up[r.id] }));
           const ae = document.activeElement?.closest?.('.blk');                      // đang đứng trong khối vừa lưu: giữ khoá cho nó
           if (ae && ins.some((r) => r.id === ae.dataset.id)) { lockedEl = ae; await rpc('lock_block', { p_id: ae.dataset.id, p_token: TOKEN }); }
         }
         for (const u of upd) {
-          const { error } = await sb.from('meeting_blocks').update({ type: u.b.type, content: u.b.content, updated_by: S.me.id, updated_at: new Date().toISOString() }).eq('id', u.b.id);
-          if (error) throw error; known.set(u.b.id, { type: u.b.type, c: u.c, pos: u.pos });
+          // chỉ ghi nếu bản trên DB vẫn là bản mình biết; nếu người khác đã sửa khối này thì lấy bản của họ, không ghi đè im lặng
+          const k = known.get(u.b.id);
+          const { data, error } = await sb.from('meeting_blocks').update({ type: u.b.type, content: u.b.content, updated_by: S.me.id, updated_at: new Date().toISOString() }).eq('id', u.b.id).eq('updated_at', k.u).select('updated_at');
+          if (error) throw error;
+          if (data?.length) { known.set(u.b.id, { type: u.b.type, c: u.c, pos: u.pos, u: data[0].updated_at }); continue; }
+          const { data: row } = await sb.from('meeting_blocks').select('*').eq('id', u.b.id).maybeSingle();
+          if (row) { ed.remote.upsert(row, true); known.set(row.id, { type: row.type, c: JSON.stringify(row.content), pos: row.pos, u: row.updated_at }); } else { ed.remote.remove(u.b.id); known.delete(u.b.id); }
+          toast(L2('Một khối vừa được người khác sửa, đã lấy bản mới của họ.', 'A block was just changed by someone else; their version was loaded.'));
         }
         if (del.length) { const { error } = await sb.from('meeting_blocks').delete().in('id', del); if (error) throw error; del.forEach((id) => known.delete(id)); }
       } while (dirty);
@@ -327,7 +334,7 @@ function syncEditor(ed, meetingId, rows, onPresence) {
     if (p.eventType === 'DELETE') { const id = p.old.id; known.delete(id); locks.delete(id); ed.remote.remove(id); pres(); return; }
     const r = p.new, mine = r.lock_token === TOKEN, live = r.lock_token && !mine && new Date(r.lock_until) > new Date();
     if (live) locks.set(r.id, { name: pmap()[r.lock_by]?.name || '?', until: +new Date(r.lock_until) }); else locks.delete(r.id);
-    ed.remote.upsert(r); known.set(r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos });
+    ed.remote.upsert(r); known.set(r.id, { type: r.type, c: JSON.stringify(r.content), pos: r.pos, u: r.updated_at });
     ed.setLock(r.id, live ? locks.get(r.id) : null); pres();
   }).subscribe();
 
